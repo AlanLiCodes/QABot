@@ -24,7 +24,7 @@ def _task_prompt(case: TestCase, url: str) -> str:
 
 
 def _browser_use_available() -> bool:
-    if not os.getenv("OPENAI_API_KEY"):
+    if not os.getenv("GOOGLE_API_KEY"):
         return False
     try:
         import browser_use  # noqa: F401
@@ -36,9 +36,13 @@ def _browser_use_available() -> bool:
 
 async def _run_browser_use_agent(case: TestCase, url: str) -> str:
     from browser_use import Agent
-    from langchain_openai import ChatOpenAI
+    from langchain_google_genai import ChatGoogleGenerativeAI
 
-    llm = ChatOpenAI(model="gpt-4o", temperature=0.0)
+    llm = ChatGoogleGenerativeAI(
+        model=os.getenv("GEMINI_AGENT_MODEL", "gemini-2.0-flash"),
+        google_api_key=os.getenv("GOOGLE_API_KEY"),
+        temperature=0.0,
+    )
     agent = Agent(
         task=_task_prompt(case, url),
         llm=llm,

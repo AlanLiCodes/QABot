@@ -2,8 +2,6 @@ import json
 import os
 from typing import Any
 
-import httpx
-
 from models.schemas import TestCase, TestResultPayload
 
 VALIDATOR_SYSTEM = """You are a QA validator. Given a test case, executor trace, page metadata, and evidence paths,
@@ -21,8 +19,9 @@ async def validate_result(
     evidence: list[str],
     http_ok: bool,
 ) -> TestResultPayload:
-    key = os.getenv("OPENAI_API_KEY")
+    key = (os.getenv("GOOGLE_API_KEY") or "").strip()
     if key:
+        model = os.getenv("GEMINI_VALIDATOR_MODEL", "gemini-2.0-flash")
         user = json.dumps(
             {
                 "test_case": case.model_dump(),
@@ -34,25 +33,24 @@ async def validate_result(
             },
             ensure_ascii=False,
         )
-        payload = {
-            "model": os.getenv("OPENAI_VALIDATOR_MODEL", "gpt-4o-mini"),
-            "messages": [
-                {"role": "system", "content": VALIDATOR_SYSTEM},
-                {"role": "user", "content": user},
-            ],
-            "temperature": 0.1,
-            "response_format": {"type": "json_object"},
-        }
-        async with httpx.AsyncClient(timeout=90.0) as client:
-            r = await client.post(
-                "https://api.openai.com/v1/chat/completions",
-                headers={"Authorization": f"Bearer {key}"},
-                json=payload,
+        try:
+            from google import genai
+            from google.genai import types
+
+            client = genai.Client(api_key=key)
+            response = client.models.generate_content(
+                model=model,
+                contents=user,
+                config=types.GenerateContentConfig(
+                    system_instruction=VALIDATOR_SYSTEM,
+                    temperature=0.1,
+                    response_mime_type="application/json",
+                ),
             )
-            r.raise_for_status()
-            data = r.json()
-            raw = json.loads(data["choices"][0]["message"]["content"])
+            raw = json.loads(response.text or "{}")
             return _payload_from_dict(case.id, raw, trace)
+        except Exception:
+            pass  # fall through to heuristic
 
     return _heuristic_validate(case, trace, page_title, final_url, evidence, http_ok)
 
