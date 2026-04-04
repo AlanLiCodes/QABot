@@ -9,6 +9,68 @@ import {
   type TestCase,
 } from "@/lib/api";
 
+const PRIORITY_STYLES: Record<string, string> = {
+  P0: "bg-rose-950 text-rose-300 border-rose-800",
+  P1: "bg-amber-950 text-amber-200 border-amber-800",
+  P2: "bg-zinc-800 text-zinc-400 border-zinc-700",
+};
+
+const FAQ_ITEMS = [
+  {
+    q: 'What does "pass / fail / blocked / flaky" mean?',
+    a: (
+      <ul className="space-y-1 text-sm text-zinc-400 list-none">
+        <li><span className="text-emerald-400 font-medium">pass:</span> The agent completed all steps and found no issues matching the failure signals.</li>
+        <li><span className="text-red-400 font-medium">fail:</span> One or more expected outcomes were not met, or an error was detected.</li>
+        <li><span className="text-amber-300 font-medium">blocked:</span> The agent could not proceed — usually a login wall, CAPTCHA, or bot-detection challenge prevented access.</li>
+        <li><span className="text-sky-300 font-medium">flaky:</span> The result was inconsistent — sometimes passing, sometimes failing. Usually a timing or race condition.</li>
+      </ul>
+    ),
+  },
+  {
+    q: "What does severity (low / medium / high) mean?",
+    a: (
+      <ul className="space-y-1 text-sm text-zinc-400 list-none">
+        <li><span className="text-red-400 font-medium">high:</span> Likely blocks users completely from using a feature.</li>
+        <li><span className="text-amber-300 font-medium">medium:</span> Degrades the user experience but doesn&apos;t fully prevent use.</li>
+        <li><span className="text-zinc-400 font-medium">low:</span> Minor or cosmetic issue with minimal user impact.</li>
+      </ul>
+    ),
+  },
+  {
+    q: "What does confidence % mean?",
+    a: (
+      <p className="text-sm text-zinc-400">
+        When Gemini validates results, confidence reflects how certain it is of the classification (e.g. 90% = very confident it&apos;s a real failure). When the AI key is unavailable and heuristic fallback is used, confidence is lower (50–65%) because the classification is rule-based, not AI-validated.
+      </p>
+    ),
+  },
+  {
+    q: "What does the agent actually do?",
+    a: (
+      <p className="text-sm text-zinc-400">
+        Each test case runs in two stages: (1) Playwright takes a screenshot and checks HTTP status as a quick baseline. (2) The Browser Use Cloud agent opens a real browser, follows the test steps, navigates subpages, clicks buttons, fills forms, and reports what it found. The agent trace in each result card shows every step the agent took.
+      </p>
+    ),
+  },
+  {
+    q: 'Why is a test "blocked"?',
+    a: (
+      <p className="text-sm text-zinc-400">
+        Sites like LinkedIn, Google, or university portals often detect automated browsers and show a CAPTCHA or login wall. The agent stops and marks the case blocked rather than guessing. You can try re-running with credentials provided in the test requirement, or the Browser Use Cloud agent may bypass bot detection better than a plain headless browser.
+      </p>
+    ),
+  },
+  {
+    q: 'What is "Requirement-focused check" / "Smoke test" etc.?',
+    a: (
+      <p className="text-sm text-zinc-400">
+        When you click &quot;Generate test cases&quot;, Gemini reads your requirement and creates named test cases. &quot;Reach application&quot; checks the page loads. &quot;Primary navigation sanity&quot; clicks your main nav. &quot;Requirement-focused check&quot; directly exercises the specific feature you described. &quot;Form or input resilience&quot; tests form validation. &quot;Mobile viewport sanity&quot; checks the layout on a narrow screen.
+      </p>
+    ),
+  },
+];
+
 export default function Home() {
   const [url, setUrl] = useState("https://example.com");
   const [requirement, setRequirement] = useState(
@@ -92,29 +154,12 @@ export default function Home() {
     <div className="min-h-screen bg-zinc-950 text-zinc-100">
       <div className="mx-auto max-w-4xl px-4 py-10">
         <header className="mb-10">
-          <div className="flex items-center gap-4 mb-4 text-sm">
-            <span className="font-semibold text-white">QABot</span>
-            <span className="text-zinc-400">Runs</span>
-            <a href="/chat" className="text-violet-400 hover:underline">
-              💬 Chat interface
-            </a>
-          </div>
           <p className="text-xs uppercase tracking-[0.2em] text-violet-400">
             DiamondHacks · AI QA Engineer
           </p>
           <h1 className="mt-2 text-3xl font-semibold text-white sm:text-4xl">
             Requirements → browser runs → bug reports
           </h1>
-          <p className="mt-3 max-w-2xl text-sm text-zinc-400">
-            Requests use the Next.js proxy at{" "}
-            <code className="rounded bg-zinc-900 px-1">/api/qa/*</code> → FastAPI (default{" "}
-            <code className="rounded bg-zinc-900 px-1">http://127.0.0.1:8000</code>). Override with{" "}
-            <code className="rounded bg-zinc-900 px-1">QA_API_URL</code> in{" "}
-            <code className="rounded bg-zinc-900 px-1">apps/web/.env.local</code> if needed.
-            Optional: <code className="rounded bg-zinc-900 px-1">OPENAI_API_KEY</code> for smarter
-            plans/validation; <code className="rounded bg-zinc-900 px-1">BROWSER_USE_API_KEY</code> in{" "}
-            <code className="rounded bg-zinc-900 px-1">apps/api/.env</code> for Browser Use agents.
-          </p>
         </header>
 
         <section className="space-y-6 rounded-2xl border border-zinc-800 bg-zinc-900/40 p-6 shadow-xl">
@@ -180,26 +225,63 @@ export default function Home() {
             <div className="border-t border-zinc-800 pt-6">
               <h2 className="text-sm font-semibold text-zinc-200">Generated cases</h2>
               <ul className="mt-3 space-y-3">
-                {cases.map((c) => (
-                  <li
-                    key={c.id}
-                    className="flex gap-3 rounded-lg border border-zinc-800 bg-zinc-950/60 p-3"
-                  >
-                    <input
-                      type="checkbox"
-                      className="mt-1"
-                      checked={!!selected[c.id]}
-                      onChange={(e) =>
-                        setSelected((s) => ({ ...s, [c.id]: e.target.checked }))
-                      }
-                    />
-                    <div>
-                      <div className="font-medium text-white">{c.name}</div>
-                      <div className="text-xs text-zinc-500">{c.id}</div>
-                      <p className="mt-1 text-sm text-zinc-400">{c.goal}</p>
-                    </div>
-                  </li>
-                ))}
+                {cases.map((c) => {
+                  const priorityStyle =
+                    PRIORITY_STYLES[c.priority] ?? PRIORITY_STYLES.P2;
+                  return (
+                    <li
+                      key={c.id}
+                      className="flex gap-3 rounded-lg border border-zinc-800 bg-zinc-950/60 p-3"
+                    >
+                      <input
+                        type="checkbox"
+                        className="mt-1 shrink-0"
+                        checked={!!selected[c.id]}
+                        onChange={(e) =>
+                          setSelected((s) => ({ ...s, [c.id]: e.target.checked }))
+                        }
+                      />
+                      <div className="min-w-0 flex-1">
+                        {/* Name + priority + tags */}
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className="font-semibold text-white">{c.name}</span>
+                          {c.priority && (
+                            <span
+                              className={`rounded-full border px-2 py-0.5 text-xs font-medium ${priorityStyle}`}
+                            >
+                              {c.priority}
+                            </span>
+                          )}
+                          {c.tags?.map((tag) => (
+                            <span
+                              key={tag}
+                              className="rounded-full bg-zinc-800 px-2 py-0.5 text-xs text-zinc-400"
+                            >
+                              {tag}
+                            </span>
+                          ))}
+                        </div>
+                        {/* Goal */}
+                        {c.goal && (
+                          <p className="mt-1 text-xs text-zinc-500">{c.goal}</p>
+                        )}
+                        {/* First 3 steps */}
+                        {c.steps && c.steps.length > 0 && (
+                          <ol className="mt-1.5 list-decimal list-inside space-y-0.5">
+                            {c.steps.slice(0, 3).map((s, i) => (
+                              <li key={i} className="text-xs text-zinc-400">{s}</li>
+                            ))}
+                            {c.steps.length > 3 && (
+                              <li className="text-xs text-zinc-600">
+                                +{c.steps.length - 3} more steps…
+                              </li>
+                            )}
+                          </ol>
+                        )}
+                      </div>
+                    </li>
+                  );
+                })}
               </ul>
               <p className="mt-2 text-xs text-zinc-500">
                 Uncheck cases to skip. If none are checked, all generated cases run.
@@ -239,6 +321,30 @@ export default function Home() {
               </li>
             ))}
           </ul>
+        </section>
+
+        {/* FAQ */}
+        <section className="mt-10">
+          <div className="mb-4">
+            <h2 className="text-base font-semibold text-zinc-200">Frequently asked questions</h2>
+            <p className="text-xs text-zinc-500 mt-0.5">Understanding your QA results</p>
+          </div>
+          <div className="space-y-2">
+            {FAQ_ITEMS.map((item) => (
+              <details
+                key={item.q}
+                className="group rounded-xl border border-zinc-800 bg-zinc-900/40"
+              >
+                <summary className="flex cursor-pointer items-center justify-between px-4 py-3 text-sm font-medium text-zinc-200 hover:text-white select-none list-none">
+                  <span>{item.q}</span>
+                  <span className="ml-4 shrink-0 text-violet-400 text-xs group-open:rotate-180 transition-transform">▾</span>
+                </summary>
+                <div className="border-t border-zinc-800 px-4 py-3">
+                  {item.a}
+                </div>
+              </details>
+            ))}
+          </div>
         </section>
       </div>
     </div>

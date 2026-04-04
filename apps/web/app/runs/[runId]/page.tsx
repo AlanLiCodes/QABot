@@ -16,6 +16,13 @@ import {
 import ResultCard from "./ResultCard";
 import SummaryBar from "./SummaryBar";
 
+const STATUS_LEGEND = [
+  { label: "pass", color: "bg-emerald-950 text-emerald-300", icon: "✅" },
+  { label: "fail", color: "bg-red-950 text-red-300", icon: "❌" },
+  { label: "blocked", color: "bg-amber-950 text-amber-200", icon: "⚠️" },
+  { label: "flaky", color: "bg-sky-950 text-sky-300", icon: "🔄" },
+];
+
 export default function RunPage() {
   const params = useParams();
   const runId = params.runId as string;
@@ -104,16 +111,6 @@ export default function RunPage() {
   return (
     <div className="min-h-screen bg-zinc-950 text-zinc-100">
       <div className="mx-auto max-w-5xl px-4 py-10">
-        {/* Nav */}
-        <div className="flex items-center gap-4 mb-6 text-sm">
-          <Link href="/" className="text-violet-400 hover:underline">
-            ← New run
-          </Link>
-          <Link href="/chat" className="text-violet-400 hover:underline">
-            💬 Chat about this run
-          </Link>
-        </div>
-
         <h1 className="text-2xl font-semibold text-white">
           Run <span className="font-mono text-violet-400">{runId.slice(0, 8)}…</span>
         </h1>
@@ -165,7 +162,7 @@ export default function RunPage() {
             </div>
 
             {data?.requirement_text && (
-              <p className="text-sm text-zinc-300 italic">"{data.requirement_text}"</p>
+              <p className="text-sm text-zinc-300 italic">&ldquo;{data.requirement_text}&rdquo;</p>
             )}
 
             {/* Summary bar */}
@@ -175,9 +172,24 @@ export default function RunPage() {
               total={total}
             />
 
+            {/* Status legend */}
+            <div className="flex flex-wrap items-center gap-2 text-xs text-zinc-500">
+              <span className="font-semibold uppercase tracking-wide mr-1">Legend:</span>
+              {STATUS_LEGEND.map(({ label, color, icon }) => (
+                <span
+                  key={label}
+                  className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 ${color}`}
+                  title={label}
+                >
+                  <span>{icon}</span>
+                  <span>{label}</span>
+                </span>
+              ))}
+            </div>
+
             {/* Actions */}
             {isCompleted && (
-              <div className="flex gap-3">
+              <div className="flex flex-wrap gap-3">
                 <button
                   type="button"
                   disabled={rerunBusy}
@@ -190,7 +202,13 @@ export default function RunPage() {
                   href={`/chat?from_run=${runId}`}
                   className="rounded-lg border border-violet-700 bg-violet-950/40 px-3 py-1.5 text-sm text-violet-300 hover:bg-violet-900/40"
                 >
-                  💬 Chat about this run
+                  💬 Chat about this run →
+                </Link>
+                <Link
+                  href="/"
+                  className="rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-1.5 text-sm text-zinc-300 hover:bg-zinc-800"
+                >
+                  ← New run
                 </Link>
               </div>
             )}
