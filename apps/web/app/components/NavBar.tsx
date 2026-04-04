@@ -2,12 +2,13 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { FlaskConical, MessageSquare, LayoutDashboard, ListChecks } from "lucide-react";
+import { FlaskConical, MessageSquare, Info, PlusCircle, ListChecks } from "lucide-react";
 
 const links = [
-  { href: "/",     label: "New Run", icon: LayoutDashboard },
-  { href: "/chat", label: "Chat",    icon: MessageSquare },
-  { href: "/runs", label: "Results", icon: ListChecks },
+  { href: "/",        label: "About",   icon: Info },
+  { href: "/new-run", label: "New Run", icon: PlusCircle },
+  { href: "/runs",    label: "Results", icon: ListChecks },
+  { href: "/chat",    label: "Chat",    icon: MessageSquare },
 ];
 
 export default function NavBar() {
@@ -31,10 +32,9 @@ export default function NavBar() {
         {/* Nav links */}
         <div className="flex gap-1">
           {links.map(({ href, label, icon: Icon }) => {
+            // "/" must be exact so /new-run and /runs don't also highlight About
             const active =
-              href === "/"
-                ? path === "/"
-                : path === href || path.startsWith(href + "/");
+              href === "/" ? path === "/" : path === href || path.startsWith(href + "/");
             return (
               <Link
                 key={href}

@@ -35,7 +35,7 @@ export default function RunsPage() {
             </p>
           </div>
           <Link
-            href="/"
+            href="/new-run"
             className="flex items-center gap-1.5 rounded-lg bg-gradient-to-r from-amber-400 to-violet-600 px-4 py-2 text-sm font-semibold text-white hover:from-amber-300 hover:to-violet-500"
           >
             <Plus size={14} />
@@ -54,7 +54,7 @@ export default function RunsPage() {
             <div className="px-5 py-10 text-center">
               <p className="text-sm text-zinc-500">No runs yet.</p>
               <Link
-                href="/"
+                href="/new-run"
                 className="mt-3 inline-flex items-center gap-1.5 text-sm text-violet-400 hover:underline"
               >
                 Create your first run
