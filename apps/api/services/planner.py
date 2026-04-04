@@ -4,7 +4,6 @@ import re
 import uuid
 from typing import Any
 
-import httpx
 from pydantic import ValidationError
 
 from models.schemas import TestCase
@@ -126,52 +125,50 @@ async def generate_test_cases(
     requirement_text: str,
     max_cases: int,
 ) -> list[TestCase]:
-    key = (os.getenv("OPENAI_API_KEY") or "").strip()
+    key = (os.getenv("GOOGLE_API_KEY") or "").strip()
     if not key:
         return _fallback_cases(url, requirement_text, max_cases)
 
+    model = os.getenv("GEMINI_PLANNER_MODEL", "gemini-2.0-flash")
     user = f"Target URL: {url}\nRequirement:\n{requirement_text}\nGenerate at most {max_cases} cases."
-    payload = {
-        "model": os.getenv("OPENAI_PLANNER_MODEL", "gpt-4o-mini"),
-        "messages": [
-            {"role": "system", "content": PLANNER_SYSTEM},
-            {"role": "user", "content": user},
-        ],
-        "temperature": 0.3,
-        "response_format": {"type": "json_object"},
-    }
+
     try:
-        async with httpx.AsyncClient(timeout=120.0) as client:
-            r = await client.post(
-                "https://api.openai.com/v1/chat/completions",
-                headers={"Authorization": f"Bearer {key}"},
-                json=payload,
-            )
-            r.raise_for_status()
-            data = r.json()
-            content = data["choices"][0]["message"]["content"]
-            parsed: dict[str, Any] = json.loads(content)
-            raw_list = parsed.get("test_cases") or parsed.get("cases") or []
-            cases: list[TestCase] = []
-            for item in raw_list[:max_cases]:
-                if isinstance(item, dict):
-                    cid = str(item.get("id") or f"tc_{uuid.uuid4().hex[:8]}")
-                    try:
-                        cases.append(
-                            TestCase(
-                                id=cid,
-                                name=str(item.get("name", "Unnamed")),
-                                goal=str(item.get("goal", "")),
-                                preconditions=_as_str_list(item.get("preconditions")),
-                                steps=_as_str_list(item.get("steps")),
-                                expected_outcomes=_as_str_list(item.get("expected_outcomes")),
-                                failure_signals=_as_str_list(item.get("failure_signals")),
-                                priority=str(item.get("priority", "P1")),
-                                tags=_as_str_list(item.get("tags")),
-                            )
+        from google import genai
+        from google.genai import types
+
+        client = genai.Client(api_key=key)
+        response = client.models.generate_content(
+            model=model,
+            contents=user,
+            config=types.GenerateContentConfig(
+                system_instruction=PLANNER_SYSTEM,
+                temperature=0.3,
+                response_mime_type="application/json",
+            ),
+        )
+        content = response.text or ""
+        parsed: dict[str, Any] = json.loads(content)
+        raw_list = parsed.get("test_cases") or parsed.get("cases") or []
+        cases: list[TestCase] = []
+        for item in raw_list[:max_cases]:
+            if isinstance(item, dict):
+                cid = str(item.get("id") or f"tc_{uuid.uuid4().hex[:8]}")
+                try:
+                    cases.append(
+                        TestCase(
+                            id=cid,
+                            name=str(item.get("name", "Unnamed")),
+                            goal=str(item.get("goal", "")),
+                            preconditions=_as_str_list(item.get("preconditions")),
+                            steps=_as_str_list(item.get("steps")),
+                            expected_outcomes=_as_str_list(item.get("expected_outcomes")),
+                            failure_signals=_as_str_list(item.get("failure_signals")),
+                            priority=str(item.get("priority", "P1")),
+                            tags=_as_str_list(item.get("tags")),
                         )
-                    except ValidationError:
-                        continue
-            return cases if cases else _fallback_cases(url, requirement_text, max_cases)
-    except (httpx.HTTPError, json.JSONDecodeError, KeyError, TypeError, ValueError, ValidationError):
+                    )
+                except ValidationError:
+                    continue
+        return cases if cases else _fallback_cases(url, requirement_text, max_cases)
+    except (json.JSONDecodeError, KeyError, TypeError, ValueError, ValidationError, Exception):
         return _fallback_cases(url, requirement_text, max_cases)
