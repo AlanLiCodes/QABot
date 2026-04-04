@@ -22,6 +22,7 @@ import {
   type RunResults,
   type SseEvent,
 } from "@/lib/api";
+import { showToast } from "@/app/components/Toast";
 
 const STATUS_LABEL: Record<string, string> = {
   pass: "PASS",
@@ -139,10 +140,17 @@ function ChatPageInner() {
       discussHistory.current.push({ role: "assistant", content: reply });
       pushMessage({ role: "agent", text: reply });
     } catch (e) {
-      pushMessage({
-        role: "system",
-        text: `Error: ${e instanceof Error ? e.message : String(e)}`,
-      });
+      const msg = e instanceof Error ? e.message : String(e);
+      // Surface configuration errors as toasts so the cause is immediately clear
+      if (msg.includes("503") || msg.toLowerCase().includes("google_api_key")) {
+        showToast(
+          "GOOGLE_API_KEY is not configured on the server. Add it to apps/api/.env and restart uvicorn.",
+          "error",
+        );
+      } else {
+        showToast(`Chat error: ${msg}`, "error");
+      }
+      pushMessage({ role: "system", text: `Error: ${msg}` });
     } finally {
       setAsking(false);
     }

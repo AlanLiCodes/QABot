@@ -80,6 +80,16 @@ _SSE_HEADERS = {
 # Routes
 # ---------------------------------------------------------------------------
 
+@router.get("/config-status")
+def config_status():
+    """Return which optional API keys are configured (values never exposed)."""
+    import os as _os
+    return {
+        "google_api_key":    bool((_os.getenv("GOOGLE_API_KEY")    or "").strip()),
+        "browser_use_api_key": bool((_os.getenv("BROWSER_USE_API_KEY") or "").strip()),
+    }
+
+
 @router.get("/runs")
 def get_runs(limit: int = 20, session: Session = Depends(get_session)):
     return list_runs(session, limit)

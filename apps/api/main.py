@@ -37,6 +37,34 @@ app.mount("/files", StaticFiles(directory=str(ARTIFACTS_DIR)), name="files")
 @app.on_event("startup")
 def on_startup():
     init_db()
+    _log_key_status()
+
+
+def _log_key_status() -> None:
+    import logging
+    log = logging.getLogger("uvicorn.error")
+
+    google_key = bool((os.getenv("GOOGLE_API_KEY") or "").strip())
+    bu_key     = bool((os.getenv("BROWSER_USE_API_KEY") or "").strip())
+
+    if google_key:
+        log.info("QABot: GOOGLE_API_KEY configured — Gemini planner, validator, and /discuss are active")
+    else:
+        log.warning(
+            "QABot: GOOGLE_API_KEY is NOT SET.\n"
+            "  Effect: test-case generation uses fallback templates; validation uses heuristics;\n"
+            "          /discuss returns 503; chat Q&A is unavailable.\n"
+            "  Fix   : add GOOGLE_API_KEY=<your_key> to apps/api/.env and restart."
+        )
+
+    if bu_key:
+        log.info("QABot: BROWSER_USE_API_KEY configured — Browser Use Cloud agent active")
+    else:
+        log.warning(
+            "QABot: BROWSER_USE_API_KEY is NOT SET.\n"
+            "  Effect: Browser Use Cloud agent unavailable; runs use Playwright smoke tests only.\n"
+            "  Fix   : add BROWSER_USE_API_KEY=<your_key> to apps/api/.env and restart."
+        )
 
 
 @app.get("/health")
