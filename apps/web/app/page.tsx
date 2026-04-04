@@ -36,12 +36,20 @@ export default function Home() {
     void refreshRuns();
   }, [refreshRuns]);
 
+  /** Ensure the URL has a scheme so Playwright can navigate to it. */
+  const normalizeUrl = (raw: string) => {
+    const trimmed = raw.trim();
+    return trimmed && !trimmed.includes("://") ? `https://${trimmed}` : trimmed;
+  };
+
   const onGenerate = async () => {
     setError(null);
     setLoading(true);
+    const normalizedUrl = normalizeUrl(url);
+    setUrl(normalizedUrl);
     try {
       const res = await generateTests({
-        url: url.trim(),
+        url: normalizedUrl,
         requirement_text: requirement,
         max_cases: 5,
       });
@@ -59,12 +67,14 @@ export default function Home() {
   const onRun = async () => {
     setError(null);
     setLoading(true);
+    const normalizedUrl = normalizeUrl(url);
+    setUrl(normalizedUrl);
     try {
       const chosen = cases.filter((c) => selected[c.id]);
       const toRun =
         chosen.length > 0 ? chosen : cases.length > 0 ? cases : undefined;
       const res = await runSuite({
-        url: url.trim(),
+        url: normalizedUrl,
         requirement_text: requirement,
         test_cases: toRun,
         max_cases: 5,

@@ -31,6 +31,19 @@ router = APIRouter(tags=["runs"])
 
 
 # ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
+
+def _normalize_url(url: str) -> str:
+    """Ensure URL has a scheme so Playwright can navigate to it.
+    'ucsd.edu' → 'https://ucsd.edu', 'http://...' / 'https://...' left unchanged."""
+    url = url.strip()
+    if url and "://" not in url:
+        url = "https://" + url
+    return url
+
+
+# ---------------------------------------------------------------------------
 # SSE helpers
 # ---------------------------------------------------------------------------
 
@@ -75,10 +88,11 @@ async def run_suite(
     background_tasks: BackgroundTasks,
     session: Session = Depends(get_session),
 ):
+    url = _normalize_url(body.url)
     run_id = str(uuid.uuid4())
     run = Run(
         id=run_id,
-        url=body.url,
+        url=url,
         requirement_text=body.requirement_text,
         status="pending",
         viewport=body.viewport,
@@ -89,7 +103,7 @@ async def run_suite(
     await ensure_cases_for_run(
         session,
         run_id,
-        body.url,
+        url,
         body.requirement_text,
         body.max_cases,
         body.test_cases,
@@ -109,10 +123,11 @@ async def run_single_test(
     background_tasks: BackgroundTasks,
     session: Session = Depends(get_session),
 ):
+    url = _normalize_url(body.url)
     run_id = str(uuid.uuid4())
     run = Run(
         id=run_id,
-        url=body.url,
+        url=url,
         requirement_text=body.requirement_text or "Single test run",
         status="pending",
         viewport=body.viewport,
@@ -157,10 +172,11 @@ async def chat_run(
     Uses asyncio.create_task (not BackgroundTasks) so the coroutine runs on the
     event loop while the StreamingResponse generator is still open.
     """
+    url = _normalize_url(body.url)
     run_id = str(uuid.uuid4())
     run = Run(
         id=run_id,
-        url=body.url,
+        url=url,
         requirement_text=body.requirement_text,
         status="pending",
         viewport=body.viewport,
@@ -172,7 +188,7 @@ async def chat_run(
     await ensure_cases_for_run(
         session,
         run_id,
-        body.url,
+        url,
         body.requirement_text,
         max_cases=1,
         provided=None,
