@@ -78,6 +78,15 @@ def _payload_from_dict(case_id: str, raw: dict[str, Any], trace: str) -> TestRes
     )
 
 
+def _extract_error_line(trace: str) -> str:
+    """Pull the first BLOCKED/NETWORK ERROR/PLAYWRIGHT ERROR line from the trace."""
+    for line in trace.splitlines():
+        for prefix in ("BLOCKED:", "NETWORK ERROR:", "PLAYWRIGHT ERROR:", "SERVER ERROR:", "HTTP ERROR:"):
+            if line.strip().startswith(prefix):
+                return line.strip()
+    return ""
+
+
 def _heuristic_validate(
     case: TestCase,
     trace: str,
@@ -87,39 +96,72 @@ def _heuristic_validate(
     http_ok: bool,
 ) -> TestResultPayload:
     tl = trace.lower()
-    blocked_markers = ("captcha", "mfa", "2fa", "login required", "blocked", "authentication required")
-    if any(m in tl for m in blocked_markers):
+
+    # ── Bot / WAF block ──────────────────────────────────────────────────────
+    bot_markers = (
+        "blocked:", "captcha", "mfa", "2fa", "login required",
+        "authentication required", "verify you are human",
+        "cloudflare", "ddos protection", "bot detection", "access denied",
+        "429 too many", "403 forbidden",
+    )
+    if any(m in tl for m in bot_markers):
+        error_line = _extract_error_line(trace) or "Bot-challenge or auth wall detected in page content."
         return TestResultPayload(
             test_case_id=case.id,
             status="blocked",
             severity="medium",
-            confidence=0.55,
-            failed_step=None,
+            confidence=0.70,
+            failed_step="Load target page",
             expected="; ".join(case.expected_outcomes[:2]) or case.goal,
-            actual="Flow stopped before completion (auth or blocker).",
+            actual=error_line,
             repro_steps=case.steps[:5] if case.steps else [f"Open {final_url}"],
             evidence=evidence,
-            suspected_issue="Human-in-the-loop may be required (login/MFA/captcha).",
-            business_impact="Cannot verify end-to-end without credentials.",
+            suspected_issue=(
+                "Site is blocking automated browsers (Cloudflare, CAPTCHA, WAF, or rate limit). "
+                "The Browser Use Cloud agent may be able to bypass this — check the agent trace."
+            ),
+            business_impact="Automated QA cannot verify this flow without bypassing bot protection.",
             agent_trace=trace,
         )
 
+    # ── Network / navigation failure ─────────────────────────────────────────
     if not http_ok or not page_title.strip():
+        error_line = _extract_error_line(trace) or "Navigation failed or page returned no content."
+        # Try to infer a more specific cause from the trace
+        if "dns" in tl or "name_not_resolved" in tl or "name_not_found" in tl:
+            suspected = "DNS resolution failed — check that the URL is correct and the domain exists."
+            impact = "The domain cannot be reached; users would see a browser error page."
+        elif "refused" in tl:
+            suspected = "Connection refused — the server may be down or the port is not open."
+            impact = "Service is unreachable on this address."
+        elif "timed out" in tl or "timeout" in tl:
+            suspected = "Connection timed out — the server is slow, overloaded, or blocking headless traffic."
+            impact = "Users on slow networks may also experience timeouts."
+        elif "ssl" in tl or "tls" in tl:
+            suspected = "SSL/TLS handshake error — certificate may be invalid or expired."
+            impact = "Browsers will show a security warning; most users will not proceed."
+        elif "invalid url" in tl:
+            suspected = "Malformed URL — ensure it includes a valid scheme (https://)."
+            impact = "No users can reach this address as-is."
+        else:
+            suspected = "Network error or blocking response — see agent trace for details."
+            impact = "Users may be unable to access the application."
         return TestResultPayload(
             test_case_id=case.id,
             status="fail",
             severity="high",
-            confidence=0.65,
+            confidence=0.75,
             failed_step="Load target page",
-            expected="Page loads with visible content",
-            actual="Missing title or failed navigation.",
+            expected="Page loads with HTTP 2xx and visible title",
+            actual=error_line,
             repro_steps=case.steps[:5] if case.steps else [f"Open {final_url}"],
             evidence=evidence,
-            suspected_issue="Network error, DNS, or blocking response.",
-            business_impact="Users may be unable to access the app.",
+            suspected_issue=suspected,
+            business_impact=impact,
             agent_trace=trace,
         )
 
+    # ── Runtime / UI error ───────────────────────────────────────────────────
     if "error" in tl and "no error" not in tl:
         return TestResultPayload(
             test_case_id=case.id,
@@ -128,14 +170,15 @@ def _heuristic_validate(
             confidence=0.6,
             failed_step=case.steps[0] if case.steps else "Execute flow",
             expected="; ".join(case.expected_outcomes[:2]) or case.goal,
-            actual="Trace mentions an error state.",
+            actual="Trace mentions an error state — see agent trace for details.",
             repro_steps=case.steps[:6],
             evidence=evidence,
-            suspected_issue="See trace for UI or runtime error hints.",
-            business_impact="Feature may be unreliable.",
+            suspected_issue="See agent trace for UI or runtime error hints.",
+            business_impact="Feature may be unreliable for end users.",
             agent_trace=trace,
         )
 
+    # ── Apparent pass ────────────────────────────────────────────────────────
     return TestResultPayload(
         test_case_id=case.id,
         status="pass",

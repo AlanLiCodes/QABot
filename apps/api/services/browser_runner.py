@@ -147,15 +147,35 @@ async def _run_playwright_smoke(
             page = await context.new_page()
             resp = await page.goto(url, wait_until="domcontentloaded", timeout=45000)
             if resp is not None:
-                http_ok = 200 <= resp.status < 400
-                trace_parts.append(f"HTTP status: {resp.status}")
+                status_code = resp.status
+                http_ok = 200 <= status_code < 400
+                trace_parts.append(f"HTTP status: {status_code}")
+                # Surface blocking responses explicitly so the validator can classify them
+                if status_code == 403:
+                    trace_parts.append("BLOCKED: server returned 403 Forbidden — likely bot/WAF block")
+                elif status_code == 429:
+                    trace_parts.append("BLOCKED: server returned 429 Too Many Requests — rate limited")
+                elif status_code >= 500:
+                    trace_parts.append(f"SERVER ERROR: {status_code} — upstream service failure")
+                elif not http_ok:
+                    trace_parts.append(f"HTTP ERROR: {status_code}")
             await page.wait_for_timeout(800)
             title = await page.title()
             final_url = page.url
             trace_parts.append(f"Title: {title}")
             trace_parts.append(f"Final URL: {final_url}")
-            await page.screenshot(path=str(shot_path), full_page=False)
-            trace_parts.append(f"Screenshot saved: {shot_path.name}")
+
+            # Detect bot-challenge pages that return HTTP 200 but show a block screen
+            page_text = (await page.inner_text("body") if await page.query_selector("body") else "").lower()
+            if any(kw in page_text for kw in ("captcha", "verify you are human", "cloudflare", "access denied", "bot detection", "ddos protection")):
+                trace_parts.append("BLOCKED: page content indicates a bot-challenge or WAF interstitial (Cloudflare/CAPTCHA)")
+
+            try:
+                await page.screenshot(path=str(shot_path), full_page=False)
+                trace_parts.append(f"Screenshot saved: {shot_path.name}")
+            except Exception as ss_err:
+                trace_parts.append(f"Screenshot failed: {ss_err!s}")
+
             # Must retrieve video path BEFORE context.close() finalises the file
             if page.video:
                 try:
@@ -164,7 +184,20 @@ async def _run_playwright_smoke(
                     video_path_raw = None
         except Exception as e:
             http_ok = False
-            trace_parts.append(f"Playwright error: {e!s}")
+            err_str = str(e)
+            # Classify common Playwright navigation errors with actionable messages
+            if "net::ERR_NAME_NOT_RESOLVED" in err_str or "ERR_NAME_NOT_FOUND" in err_str:
+                trace_parts.append(f"NETWORK ERROR: DNS resolution failed — '{url}' could not be resolved. Check the URL.")
+            elif "net::ERR_CONNECTION_REFUSED" in err_str:
+                trace_parts.append(f"NETWORK ERROR: Connection refused — server at '{url}' is not accepting connections.")
+            elif "net::ERR_CONNECTION_TIMED_OUT" in err_str or "Timeout" in err_str:
+                trace_parts.append(f"NETWORK ERROR: Connection timed out navigating to '{url}'.")
+            elif "net::ERR_SSL" in err_str:
+                trace_parts.append(f"NETWORK ERROR: SSL/TLS error navigating to '{url}': {err_str[:200]}")
+            elif "Cannot navigate to invalid URL" in err_str:
+                trace_parts.append(f"NETWORK ERROR: Invalid URL '{url}' — missing scheme (http/https)?")
+            else:
+                trace_parts.append(f"PLAYWRIGHT ERROR: {err_str[:400]}")
         finally:
             try:
                 await context.close()  # finalises the .webm recording
