@@ -1,8 +1,8 @@
-# fastapi/uvicorn versions align with starlette>=0.46 (required by browser-use dependency tree)
-fastapi==0.135.3
-uvicorn[standard]==0.43.0
-sqlmodel==0.0.22
-httpx==0.28.1
+# Flexible ranges so pip can resolve browser-use's starlette dependency
+fastapi>=0.110.0
+uvicorn[standard]>=0.29.0
+sqlmodel>=0.0.16
+httpx>=0.27.0
 python-dotenv>=1.0.1
 pydantic>=2.9.0,<3
 playwright==1.49.1
