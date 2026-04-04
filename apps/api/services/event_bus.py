@@ -17,6 +17,19 @@ def create_queue(run_id: str) -> asyncio.Queue:
     return q
 
 
+def get_or_create_queue(run_id: str) -> asyncio.Queue:
+    """Return the existing queue for *run_id*, or create one if none exists.
+
+    Use this in the SSE generator so it reuses the queue the orchestrator
+    is already emitting to, rather than silently replacing it.
+    """
+    q = _queues.get(run_id)
+    if q is None:
+        q = asyncio.Queue(maxsize=256)
+        _queues[run_id] = q
+    return q
+
+
 def get_queue(run_id: str) -> "asyncio.Queue | None":
     return _queues.get(run_id)
 

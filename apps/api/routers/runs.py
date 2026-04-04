@@ -19,7 +19,7 @@ from models.schemas import (
     RunSuiteResponse,
     TestCase,
 )
-from services.event_bus import close_queue, create_queue
+from services.event_bus import close_queue, create_queue, get_or_create_queue
 from services.orchestrator import (
     ensure_cases_for_run,
     execute_run,
@@ -50,7 +50,9 @@ def _normalize_url(url: str) -> str:
 
 async def _sse_generator(run_id: str):
     """Async generator that drains the run's event queue as SSE lines."""
-    queue = create_queue(run_id)
+    # Use get_or_create — never replace the queue the orchestrator is already
+    # emitting to.  create_queue() would silently discard all buffered events.
+    queue = get_or_create_queue(run_id)
     try:
         while True:
             try:
@@ -149,12 +151,26 @@ async def run_single_test(
     return {"run_id": run_id, "message": "Queued single test case."}
 
 
+async def _sse_completed_generator(run_id: str):
+    """Immediately emits run_completed + done for an already-finished run."""
+    yield f'data: {json.dumps({"type": "run_completed", "data": {"run_id": run_id, "status": "completed"}})}\n\n'
+    yield 'data: {"type":"done"}\n\n'
+
+
 @router.get("/stream/{run_id}")
 async def stream_run(run_id: str, session: Session = Depends(get_session)):
     """Server-Sent Events stream for a run's live progress."""
     run = session.get(Run, run_id)
     if not run:
         raise HTTPException(status_code=404, detail="Run not found")
+    # If the run already finished (e.g. page refresh), send synthetic events
+    # immediately so the UI transitions to the completed state right away.
+    if run.status == "completed":
+        return StreamingResponse(
+            _sse_completed_generator(run_id),
+            media_type="text/event-stream",
+            headers=_SSE_HEADERS,
+        )
     return StreamingResponse(
         _sse_generator(run_id),
         media_type="text/event-stream",
@@ -195,7 +211,8 @@ async def chat_run(
         provided=None,
     )
 
-    # Queue must exist before the task starts to avoid lost events
+    # Queue must exist before the task starts to avoid lost events.
+    # _sse_generator uses get_or_create_queue so it reuses this same queue.
     create_queue(run_id)
     asyncio.create_task(execute_run(run_id))
 
