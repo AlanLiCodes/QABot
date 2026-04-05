@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
-import { ArrowLeft, MessageSquare, RotateCcw, ExternalLink } from "lucide-react";
+import { ArrowLeft, Clock, MessageSquare, RotateCcw, ExternalLink, Radio } from "lucide-react";
 import {
   getApiBase,
   getResults,
@@ -11,10 +11,19 @@ import {
   streamRunEvents,
   type RunResults,
   type SseEvent,
+  type StepTimings,
   type TestResult,
 } from "@/lib/api";
 import ResultCard from "./ResultCard";
 import SummaryBar from "./SummaryBar";
+
+const STEP_LABELS: Record<string, string> = {
+  http_smoke:    "HTTP check",
+  browser_agent: "Browser agent",
+  validate:      "AI validation",
+  annotate:      "Annotation",
+  total:         "Total / case",
+};
 
 const STATUS_LEGEND = [
   { label: "pass", color: "bg-emerald-950 text-emerald-300 border border-emerald-800" },
@@ -33,6 +42,11 @@ export default function RunPage() {
   const [streamDone, setStreamDone] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [rerunBusy, setRerunBusy] = useState(false);
+  // case_id → Browser Use live URL (available while case is running)
+  const [liveUrls, setLiveUrls] = useState<Record<string, string>>({});
+  // accumulated per-step timings from SSE (step → list of seconds across cases)
+  const [allTimings, setAllTimings] = useState<Record<string, number[]>>({});
+  const [totalElapsed, setTotalElapsed] = useState<number | null>(null);
   const didFetch = useRef(false);
 
   useEffect(() => {
@@ -49,25 +63,46 @@ export default function RunPage() {
     const handler = (event: SseEvent) => {
       if (event.type === "run_started") {
         setTotalCases((event.data.total as number) ?? 0);
+      } else if (event.type === "case_live_url") {
+        const caseId = event.data.case_id as string;
+        const liveUrl = event.data.live_url as string;
+        if (caseId && liveUrl) {
+          setLiveUrls((prev) => ({ ...prev, [caseId]: liveUrl }));
+        }
       } else if (event.type === "case_completed") {
         const d = event.data;
+        const caseTimings = (d.timings ?? {}) as StepTimings;
         const partial: TestResult = {
-          test_case_id: (d.case_id as string) ?? "",
-          status: (d.status as TestResult["status"]) ?? "fail",
-          severity: (d.severity as TestResult["severity"]) ?? "medium",
-          confidence: typeof d.confidence === "number" ? d.confidence : 0.5,
-          failed_step: (d.failed_step as string | null) ?? null,
-          expected: (d.expected as string) ?? "",
-          actual: (d.actual as string) ?? "",
-          repro_steps: Array.isArray(d.repro_steps) ? (d.repro_steps as string[]) : [],
-          evidence: Array.isArray(d.evidence) ? (d.evidence as string[]) : [],
+          test_case_id:   (d.case_id as string) ?? "",
+          status:         (d.status as TestResult["status"]) ?? "fail",
+          severity:       (d.severity as TestResult["severity"]) ?? "medium",
+          confidence:     typeof d.confidence === "number" ? d.confidence : 0.5,
+          failed_step:    (d.failed_step as string | null) ?? null,
+          expected:       (d.expected as string) ?? "",
+          actual:         (d.actual as string) ?? "",
+          repro_steps:    Array.isArray(d.repro_steps) ? (d.repro_steps as string[]) : [],
+          evidence:       Array.isArray(d.evidence) ? (d.evidence as string[]) : [],
           suspected_issue: (d.suspected_issue as string) ?? "",
           business_impact: (d.business_impact as string) ?? "",
-          agent_trace: (d.agent_trace as string) ?? "",
-          summary: (d.summary as string) ?? "",
+          agent_trace:    (d.agent_trace as string) ?? "",
+          summary:        (d.summary as string) ?? "",
+          timings:        caseTimings,
         };
         setLiveResults((prev) => [...prev, partial]);
+        // Accumulate timings for the run-level summary
+        if (Object.keys(caseTimings).length > 0) {
+          setAllTimings((prev) => {
+            const next = { ...prev };
+            for (const [k, v] of Object.entries(caseTimings)) {
+              next[k] = [...(next[k] ?? []), v];
+            }
+            return next;
+          });
+        }
       } else if (event.type === "run_completed") {
+        if (typeof event.data.elapsed_seconds === "number") {
+          setTotalElapsed(event.data.elapsed_seconds as number);
+        }
         setStreamDone(true);
         getResults(runId)
           .then((r) => setData(r))
@@ -161,6 +196,85 @@ export default function RunPage() {
             )}
 
             <SummaryBar results={displayResults} status={runStatus} total={total} />
+
+            {/* Run-level timing summary — shown once we have data */}
+            {Object.keys(allTimings).length > 0 && (
+              <details className="rounded-xl border border-zinc-800 bg-zinc-900/40 p-4">
+                <summary className="flex cursor-pointer select-none items-center gap-2 text-sm font-semibold text-zinc-300 hover:text-white">
+                  <Clock size={14} className="text-zinc-500" />
+                  Run timing summary
+                  {totalElapsed != null && (
+                    <span className="ml-auto text-xs font-normal text-zinc-500">
+                      Wall time: {totalElapsed}s
+                    </span>
+                  )}
+                </summary>
+                <div className="mt-3 overflow-hidden rounded-lg border border-zinc-800">
+                  <table className="w-full text-xs">
+                    <thead>
+                      <tr className="border-b border-zinc-800 bg-zinc-950 text-left text-zinc-500">
+                        <th className="px-3 py-2 font-medium">Step</th>
+                        <th className="px-3 py-2 text-right font-medium">Avg</th>
+                        <th className="px-3 py-2 text-right font-medium">Min</th>
+                        <th className="px-3 py-2 text-right font-medium">Max</th>
+                        <th className="px-3 py-2 text-right font-medium">Cases</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {(["http_smoke", "browser_agent", "validate", "annotate", "total"] as const)
+                        .filter((k) => allTimings[k]?.length)
+                        .map((k) => {
+                          const vals = allTimings[k];
+                          const avg = vals.reduce((a, b) => a + b, 0) / vals.length;
+                          const min = Math.min(...vals);
+                          const max = Math.max(...vals);
+                          return (
+                            <tr key={k} className={`border-b border-zinc-900 last:border-0 ${k === "total" ? "font-semibold text-zinc-300" : "text-zinc-400"}`}>
+                              <td className="px-3 py-2">{STEP_LABELS[k] ?? k}</td>
+                              <td className="px-3 py-2 text-right tabular-nums">{avg.toFixed(2)}s</td>
+                              <td className="px-3 py-2 text-right tabular-nums text-zinc-500">{min.toFixed(2)}s</td>
+                              <td className="px-3 py-2 text-right tabular-nums text-zinc-500">{max.toFixed(2)}s</td>
+                              <td className="px-3 py-2 text-right tabular-nums text-zinc-500">{vals.length}</td>
+                            </tr>
+                          );
+                        })}
+                    </tbody>
+                  </table>
+                </div>
+                <p className="mt-2 text-xs text-zinc-600">
+                  Averages across {displayResults.length} case{displayResults.length !== 1 ? "s" : ""} in this run.
+                  View global averages at <Link href="/timings" className="text-violet-500 hover:underline">/timings</Link>.
+                </p>
+              </details>
+            )}
+
+            {/* Live browser watch links — visible while run is in progress */}
+            {!isCompleted && Object.keys(liveUrls).length > 0 && (
+              <div className="rounded-xl border border-violet-900/50 bg-violet-950/20 p-4">
+                <p className="mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-violet-400">
+                  <Radio size={12} className="animate-pulse" />
+                  Live browser sessions
+                </p>
+                <div className="flex flex-wrap gap-2">
+                  {Object.entries(liveUrls).map(([caseId, url]) => {
+                    const caseName = caseMap.get(caseId)?.name ?? caseId.slice(0, 8);
+                    return (
+                      <a
+                        key={caseId}
+                        href={url}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="flex items-center gap-1.5 rounded-lg border border-violet-800 bg-violet-900/40 px-3 py-1.5 text-xs text-violet-200 hover:bg-violet-800/60"
+                      >
+                        <Radio size={10} className="animate-pulse text-violet-400" />
+                        {caseName}
+                        <ExternalLink size={10} />
+                      </a>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
 
             {/* Status legend */}
             <div className="flex flex-wrap items-center gap-2 text-xs">

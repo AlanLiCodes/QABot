@@ -44,54 +44,82 @@ def _browser_use_available() -> bool:
     return _cloud_browser_use_available() or _local_browser_use_available()
 
 
-async def _run_browser_use_cloud_agent(case: TestCase, url: str) -> str:
-    """Execute via Browser Use Cloud API (uses $70 sponsored credits)."""
+async def _run_browser_use_cloud_agent(
+    case: TestCase,
+    url: str,
+    run_id: str,
+    viewport: str = "desktop",
+) -> tuple[str, list[str]]:
+    """Execute via Browser Use Cloud API.
+
+    Returns (trace_str, step_screenshot_urls).
+    Creates a session first to get a live_url, emits it via SSE immediately.
+    Uses highlight_elements=True so agent screenshots show element highlights.
+    """
     import asyncio
 
     from browser_use_sdk import AsyncBrowserUse
+    from services.event_bus import emit as _emit
 
     key = (os.getenv("BROWSER_USE_API_KEY") or "").strip()
     client = AsyncBrowserUse(api_key=key)
+    cloud_llm = os.getenv("BROWSER_USE_CLOUD_LLM", "gemini-3-flash-preview")
 
-    # Pick best available Gemini model via cloud (gemini-2.5-flash is fastest)
-    cloud_llm = os.getenv("BROWSER_USE_CLOUD_LLM", "gemini-2.5-flash")
+    vw, vh = (1280, 720) if viewport == "desktop" else (390, 844)
+
+    # Create session first so we can emit the live URL before the task runs
+    session = await client.sessions.create_session(
+        start_url=url,
+        browser_screen_width=vw,
+        browser_screen_height=vh,
+        keep_alive=False,
+    )
+    if session.live_url:
+        await _emit(run_id, "case_live_url", {
+            "case_id": case.id,
+            "live_url": session.live_url,
+        })
 
     created = await client.tasks.create_task(
         task=_task_prompt(case, url),
         start_url=url,
         llm=cloud_llm,  # type: ignore[arg-type]
         max_steps=20,
+        session_id=session.id,
+        highlight_elements=True,
     )
     task_id = created.id
 
-    # Poll status until terminal (max ~5 min at 2 s intervals)
+    # Poll until terminal (max ~5 min at 2 s intervals)
     for _ in range(150):
         status_view = await client.tasks.get_task_status(task_id)
         if status_view.status in ("finished", "stopped"):
             break
         await asyncio.sleep(2)
 
-    # Fetch full task details including step-by-step trace
     task_view = await client.tasks.get_task(task_id)
 
+    # Build trace and collect per-step screenshot URLs
     parts: list[str] = [f"Browser Use Cloud task {task_id} | status: {task_view.status}"]
+    step_screenshots: list[str] = []
+
     for step in task_view.steps or []:
         parts.append(f"\nStep {step.number}: {step.next_goal}")
         if step.evaluation_previous_goal:
             parts.append(f"  ↳ eval: {step.evaluation_previous_goal}")
         if step.memory:
             parts.append(f"  ↳ memory: {step.memory[:200]}")
+        if step.screenshot_url:
+            step_screenshots.append(step.screenshot_url)
 
     if task_view.output:
         parts.append(f"\nFinal output: {task_view.output}")
-
     if task_view.is_success is not None:
         parts.append(f"Agent self-reported success: {task_view.is_success}")
-
     if task_view.judge_verdict:
         parts.append(f"Judge verdict: {task_view.judge_verdict}")
 
-    return "\n".join(parts)
+    return "\n".join(parts), step_screenshots
 
 
 async def _run_browser_use_local_agent(case: TestCase, url: str) -> str:
@@ -100,7 +128,7 @@ async def _run_browser_use_local_agent(case: TestCase, url: str) -> str:
     from langchain_google_genai import ChatGoogleGenerativeAI
 
     llm = ChatGoogleGenerativeAI(
-        model=os.getenv("GEMINI_AGENT_MODEL", "gemini-2.0-flash"),
+        model=os.getenv("GEMINI_AGENT_MODEL", "gemini-3-flash-preview"),
         google_api_key=os.getenv("GOOGLE_API_KEY"),
         temperature=0.0,
     )
@@ -114,98 +142,92 @@ async def _run_browser_use_local_agent(case: TestCase, url: str) -> str:
     return str(result)
 
 
-async def _run_browser_use_agent(case: TestCase, url: str) -> str:
-    """Dispatch to cloud API if available, otherwise fall back to local agent."""
-    if _cloud_browser_use_available():
-        return await _run_browser_use_cloud_agent(case, url)
-    return await _run_browser_use_local_agent(case, url)
-
-
-async def _run_playwright_smoke(
+async def _run_browser_use_agent(
+    case: TestCase,
     url: str,
-    viewport: str,
-    shot_path: Path,
-    video_dir: Path,
-) -> tuple[str, str, str, bool, str | None]:
-    from playwright.async_api import async_playwright
+    run_id: str,
+    viewport: str = "desktop",
+) -> tuple[str, list[str]]:
+    """Dispatch to cloud API if available, otherwise fall back to local agent.
 
-    vw, vh = (1280, 720) if viewport == "desktop" else (390, 844)
+    Returns (trace_str, step_screenshot_urls).
+    """
+    if _cloud_browser_use_available():
+        return await _run_browser_use_cloud_agent(case, url, run_id, viewport)
+    # Local agent doesn't provide step screenshots
+    trace = await _run_browser_use_local_agent(case, url)
+    return trace, []
+
+
+async def _http_smoke(url: str) -> tuple[str, str, str, bool]:
+    """Lightweight HTTP check using httpx — no browser required.
+
+    Returns: (trace_str, page_title, final_url, http_ok)
+    """
+    import re
+
+    import httpx
+
     trace_parts: list[str] = []
-    http_ok = True
-    final_url = url
     title = ""
-    video_path_raw: str | None = None
+    final_url = url
+    http_ok = True
 
-    async with async_playwright() as p:
-        browser = await p.chromium.launch(headless=True)
-        try:
-            context = await browser.new_context(
-                viewport={"width": vw, "height": vh},
-                record_video_dir=str(video_dir),
-                record_video_size={"width": vw, "height": vh},
-            )
-            page = await context.new_page()
-            resp = await page.goto(url, wait_until="domcontentloaded", timeout=45000)
-            if resp is not None:
-                status_code = resp.status
-                http_ok = 200 <= status_code < 400
-                trace_parts.append(f"HTTP status: {status_code}")
-                # Surface blocking responses explicitly so the validator can classify them
-                if status_code == 403:
-                    trace_parts.append("BLOCKED: server returned 403 Forbidden — likely bot/WAF block")
-                elif status_code == 429:
-                    trace_parts.append("BLOCKED: server returned 429 Too Many Requests — rate limited")
-                elif status_code >= 500:
-                    trace_parts.append(f"SERVER ERROR: {status_code} — upstream service failure")
-                elif not http_ok:
-                    trace_parts.append(f"HTTP ERROR: {status_code}")
-            await page.wait_for_timeout(800)
-            title = await page.title()
-            final_url = page.url
+    try:
+        async with httpx.AsyncClient(
+            follow_redirects=True,
+            timeout=20.0,
+            headers={"User-Agent": "Mozilla/5.0 (compatible; KumqatQA/1.0)"},
+        ) as client:
+            resp = await client.get(url)
+            status_code = resp.status_code
+            http_ok = 200 <= status_code < 400
+            final_url = str(resp.url)
+            trace_parts.append(f"HTTP status: {status_code}")
+
+            if status_code == 403:
+                trace_parts.append("BLOCKED: server returned 403 Forbidden — likely bot/WAF block")
+            elif status_code == 429:
+                trace_parts.append("BLOCKED: server returned 429 Too Many Requests — rate limited")
+            elif status_code >= 500:
+                trace_parts.append(f"SERVER ERROR: {status_code} — upstream service failure")
+            elif not http_ok:
+                trace_parts.append(f"HTTP ERROR: {status_code}")
+
+            # Extract <title> from HTML
+            m = re.search(r"<title[^>]*>([^<]{1,200})</title>", resp.text, re.IGNORECASE)
+            title = m.group(1).strip() if m else ""
             trace_parts.append(f"Title: {title}")
             trace_parts.append(f"Final URL: {final_url}")
 
-            # Detect bot-challenge pages that return HTTP 200 but show a block screen
-            page_text = (await page.inner_text("body") if await page.query_selector("body") else "").lower()
-            if any(kw in page_text for kw in ("captcha", "verify you are human", "cloudflare", "access denied", "bot detection", "ddos protection")):
-                trace_parts.append("BLOCKED: page content indicates a bot-challenge or WAF interstitial (Cloudflare/CAPTCHA)")
+            # Detect bot-challenge pages that return 200 but show a block screen
+            body_lower = resp.text.lower()
+            if any(kw in body_lower for kw in (
+                "captcha", "verify you are human", "cloudflare", "access denied",
+                "bot detection", "ddos protection",
+            )):
+                trace_parts.append(
+                    "BLOCKED: page content indicates a bot-challenge or WAF interstitial (Cloudflare/CAPTCHA)"
+                )
 
-            try:
-                await page.screenshot(path=str(shot_path), full_page=False)
-                trace_parts.append(f"Screenshot saved: {shot_path.name}")
-            except Exception as ss_err:
-                trace_parts.append(f"Screenshot failed: {ss_err!s}")
+    except httpx.InvalidURL:
+        http_ok = False
+        trace_parts.append(f"NETWORK ERROR: Invalid URL '{url}' — missing scheme (http/https)?")
+    except httpx.ConnectError:
+        http_ok = False
+        trace_parts.append(f"NETWORK ERROR: Connection refused — server at '{url}' is not accepting connections.")
+    except httpx.TimeoutException:
+        http_ok = False
+        trace_parts.append(f"NETWORK ERROR: Connection timed out navigating to '{url}'.")
+    except Exception as e:
+        http_ok = False
+        err = str(e)
+        if "ssl" in err.lower() or "tls" in err.lower():
+            trace_parts.append(f"NETWORK ERROR: SSL/TLS error for '{url}': {err[:200]}")
+        else:
+            trace_parts.append(f"NETWORK ERROR: {err[:400]}")
 
-            # Must retrieve video path BEFORE context.close() finalises the file
-            if page.video:
-                try:
-                    video_path_raw = await page.video.path()
-                except Exception:
-                    video_path_raw = None
-        except Exception as e:
-            http_ok = False
-            err_str = str(e)
-            # Classify common Playwright navigation errors with actionable messages
-            if "net::ERR_NAME_NOT_RESOLVED" in err_str or "ERR_NAME_NOT_FOUND" in err_str:
-                trace_parts.append(f"NETWORK ERROR: DNS resolution failed — '{url}' could not be resolved. Check the URL.")
-            elif "net::ERR_CONNECTION_REFUSED" in err_str:
-                trace_parts.append(f"NETWORK ERROR: Connection refused — server at '{url}' is not accepting connections.")
-            elif "net::ERR_CONNECTION_TIMED_OUT" in err_str or "Timeout" in err_str:
-                trace_parts.append(f"NETWORK ERROR: Connection timed out navigating to '{url}'.")
-            elif "net::ERR_SSL" in err_str:
-                trace_parts.append(f"NETWORK ERROR: SSL/TLS error navigating to '{url}': {err_str[:200]}")
-            elif "Cannot navigate to invalid URL" in err_str:
-                trace_parts.append(f"NETWORK ERROR: Invalid URL '{url}' — missing scheme (http/https)?")
-            else:
-                trace_parts.append(f"PLAYWRIGHT ERROR: {err_str[:400]}")
-        finally:
-            try:
-                await context.close()  # finalises the .webm recording
-            except Exception:
-                pass
-            await browser.close()
-
-    return "\n".join(trace_parts), title, final_url, http_ok, video_path_raw
+    return "\n".join(trace_parts), title, final_url, http_ok
 
 
 async def execute_case(
@@ -214,41 +236,38 @@ async def execute_case(
     viewport: str,
     run_id: str,
     base_dir: Path,
-) -> tuple[str, str, str, list[str], bool]:
+) -> tuple[str, str, str, list[str], bool, dict[str, float]]:
     """
-    Returns: trace, page_title, final_url, evidence_rel_paths, http_ok
+    Returns: trace, page_title, final_url, evidence_rel_paths, http_ok, timings
+    timings keys: http_smoke, browser_agent (seconds, rounded to 2dp)
     """
+    import time
+
     case_dir = base_dir / case.id
     case_dir.mkdir(parents=True, exist_ok=True)
     evidence: list[str] = []
+    timings: dict[str, float] = {}
 
-    shot = case_dir / "viewport.png"
-    pw_trace, title, final_url, http_ok, video_path_raw = await _run_playwright_smoke(
-        url, viewport, shot, video_dir=case_dir
-    )
-    evidence.append(f"/files/{run_id}/{case.id}/viewport.png")
-
-    # Rename Playwright's UUID-named video to a stable path and add to evidence
-    if video_path_raw:
-        try:
-            raw = Path(video_path_raw)
-            if raw.exists():
-                dest = case_dir / "recording.webm"
-                raw.rename(dest)
-                evidence.append(f"/files/{run_id}/{case.id}/recording.webm")
-        except Exception:
-            pass
+    # Fast HTTP baseline — no browser needed
+    t0 = time.perf_counter()
+    http_trace, title, final_url, http_ok = await _http_smoke(url)
+    timings["http_smoke"] = round(time.perf_counter() - t0, 2)
 
     if _browser_use_available():
         try:
-            bu_trace = await _run_browser_use_agent(case, url)
-            combined = f"--- Playwright snapshot ---\n{pw_trace}\n\n--- Browser Use agent ---\n{bu_trace}"
+            t0 = time.perf_counter()
+            bu_trace, step_screenshots = await _run_browser_use_agent(case, url, run_id, viewport)
+            timings["browser_agent"] = round(time.perf_counter() - t0, 2)
+            combined = f"--- HTTP snapshot ---\n{http_trace}\n\n--- Browser Use agent ---\n{bu_trace}"
             agent_log = case_dir / "agent_trace.txt"
             agent_log.write_text(combined, encoding="utf-8")
             evidence.append(f"/files/{run_id}/{case.id}/agent_trace.txt")
-            return combined, title, final_url, evidence, http_ok
+            # Browser Use step screenshots (CDN URLs) with highlight_elements drawn on them
+            evidence.extend(step_screenshots)
+            return combined, title, final_url, evidence, http_ok, timings
         except Exception as e:
-            err = f"{pw_trace}\n\nBrowser Use error: {e!s}"
-            return err, title, final_url, evidence, http_ok
+            timings["browser_agent"] = round(time.perf_counter() - t0, 2)
+            err = f"{http_trace}\n\nBrowser Use error: {e!s}"
+            return err, title, final_url, evidence, http_ok, timings
 
-    return pw_trace, title, final_url, evidence, http_ok
+    return http_trace, title, final_url, evidence, http_ok, timings

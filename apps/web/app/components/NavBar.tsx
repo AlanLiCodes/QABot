@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { FlaskConical, MessageSquare, Info, PlusCircle, ListChecks, LayoutDashboard, Clock } from "lucide-react";
+import { FlaskConical, MessageSquare, Info, PlusCircle, ListChecks, LayoutDashboard, Clock, Timer } from "lucide-react";
 
 const links = [
   { href: "/",           label: "About",     icon: Info },
@@ -10,6 +10,7 @@ const links = [
   { href: "/scheduled",  label: "Scheduled", icon: Clock },
   { href: "/dashboard",  label: "Dashboard", icon: LayoutDashboard },
   { href: "/runs",       label: "Results",   icon: ListChecks },
+  { href: "/timings",    label: "Timings",   icon: Timer },
   { href: "/chat",       label: "Chat",      icon: MessageSquare },
 ];
 

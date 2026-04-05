@@ -1,10 +1,13 @@
+import os
 from pathlib import Path
 
-from sqlmodel import SQLModel, create_engine, Session
+from sqlmodel import SQLModel, Session, create_engine
 
-ROOT = Path(__file__).resolve().parent.parent.parent
-DATA_DIR = ROOT / "data"
+# DATA_DIR can be overridden via env var — useful for Railway volumes.
+# Default: a "data" folder next to this file (apps/api/data/ locally, /app/data/ in Docker).
+DATA_DIR = Path(os.getenv("DATA_DIR", str(Path(__file__).resolve().parent / "data")))
 DATA_DIR.mkdir(parents=True, exist_ok=True)
+
 DATABASE_URL = f"sqlite:///{DATA_DIR / 'qa_engineer.db'}"
 
 engine = create_engine(

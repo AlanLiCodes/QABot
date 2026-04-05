@@ -38,6 +38,8 @@ export type TestCase = {
   tags: string[];
 };
 
+export type StepTimings = Record<string, number>;
+
 export type TestResult = {
   test_case_id: string;
   status: "pass" | "fail" | "flaky" | "blocked";
@@ -50,14 +52,17 @@ export type TestResult = {
   evidence: string[];
   suspected_issue: string;
   business_impact: string;
+  suggested_fix?: string;
   agent_trace: string;
   summary: string;
+  timings?: StepTimings;
 };
 
 export type SseEvent = {
   type:
     | "run_started"
     | "case_started"
+    | "case_live_url"
     | "case_completed"
     | "run_completed"
     | "done"
@@ -223,6 +228,38 @@ export async function getStats(): Promise<StatsData> {
   const r = await fetch(`${getApiBase()}/stats`);
   if (!r.ok) throw await httpError(r);
   return r.json() as Promise<StatsData>;
+}
+
+export type StepStat = {
+  count: number;
+  avg_s: number;
+  median_s: number;
+  min_s: number;
+  max_s: number;
+  stdev_s: number;
+};
+
+export type TimingsData = {
+  count: number;
+  steps: Record<string, StepStat>;
+  note?: string;
+};
+
+export async function getTimings(): Promise<TimingsData> {
+  const r = await fetch(`${getApiBase()}/timings`);
+  if (!r.ok) throw await httpError(r);
+  return r.json() as Promise<TimingsData>;
+}
+
+export type RunTimingsData = {
+  run_id: string;
+  cases: { case_id: string; name: string; status: string; timings: StepTimings }[];
+};
+
+export async function getRunTimings(runId: string): Promise<RunTimingsData> {
+  const r = await fetch(`${getApiBase()}/timings/${runId}`);
+  if (!r.ok) throw await httpError(r);
+  return r.json() as Promise<RunTimingsData>;
 }
 
 export async function rerunFailed(runId: string): Promise<{ run_id: string; message: string }> {

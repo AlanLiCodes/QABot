@@ -1,9 +1,9 @@
 import json
 from pathlib import Path
 
-from database import ROOT
+from database import DATA_DIR
 
-ARTIFACTS = ROOT / "artifacts"
+ARTIFACTS = DATA_DIR / "artifacts"
 ARTIFACTS.mkdir(parents=True, exist_ok=True)
 
 

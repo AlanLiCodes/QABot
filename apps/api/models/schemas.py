@@ -56,8 +56,10 @@ class TestResultPayload(BaseModel):
     evidence: list[str] = Field(default_factory=list)
     suspected_issue: str = ""
     business_impact: str = ""
+    suggested_fix: str = ""
     agent_trace: str = ""
     summary: str = ""
+    timings: dict[str, float] = Field(default_factory=dict)  # step_name → seconds
 
 
 class RunResultsResponse(BaseModel):

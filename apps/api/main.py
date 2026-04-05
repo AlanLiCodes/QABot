@@ -13,10 +13,10 @@ from fastapi.staticfiles import StaticFiles
 load_dotenv(Path(__file__).resolve().parent / ".env")
 
 import models.db_models  # noqa: F401 — register tables
-from database import ROOT, engine, init_db
+from database import DATA_DIR, engine, init_db
 from routers import runs, tests
 
-ARTIFACTS_DIR = ROOT / "artifacts"
+ARTIFACTS_DIR = DATA_DIR / "artifacts"
 ARTIFACTS_DIR.mkdir(parents=True, exist_ok=True)
 
 app = FastAPI(title="Kumqat API", version="0.1.0")

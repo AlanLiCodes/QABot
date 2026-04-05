@@ -490,7 +490,7 @@ async def discuss_run(body: DiscussRequest, session: Session = Depends(get_sessi
         from google.genai import types
 
         client = genai.Client(api_key=key)
-        model = os.getenv("GEMINI_DISCUSS_MODEL", "gemini-2.0-flash")
+        model = os.getenv("GEMINI_DISCUSS_MODEL", "gemini-3-flash-preview")
         resp = client.models.generate_content(
             model=model,
             contents=contents,
@@ -568,6 +568,103 @@ def delete_scheduled_run(schedule_id: str, session: Session = Depends(get_sessio
     session.delete(sched)
     session.commit()
     return {"message": "Schedule deleted"}
+
+
+@router.get("/timings")
+def get_timings(session: Session = Depends(get_session)):
+    """Aggregate timing statistics across all stored results.
+
+    Returns per-step averages (in seconds) with count, min, max so you can see
+    where time is being spent and track improvements over runs.
+    """
+    import statistics as _stats
+
+    result_rows = session.exec(select(TestResultRow)).all()
+
+    # Collect all timings per step
+    step_samples: dict[str, list[float]] = {}
+    for rr in result_rows:
+        try:
+            payload = json.loads(rr.result_json)
+            timings: dict = payload.get("timings") or {}
+        except (json.JSONDecodeError, ValueError):
+            continue
+        for step, duration in timings.items():
+            try:
+                step_samples.setdefault(step, []).append(float(duration))
+            except (TypeError, ValueError):
+                continue
+
+    if not step_samples:
+        return {"count": 0, "steps": {}, "note": "No timing data yet — run some tests first."}
+
+    # Per-step stats
+    step_order = ["http_smoke", "browser_agent", "validate", "annotate", "total"]
+    other_steps = sorted(k for k in step_samples if k not in step_order)
+    ordered = [s for s in step_order if s in step_samples] + other_steps
+
+    steps_out: dict[str, dict] = {}
+    for step in ordered:
+        vals = step_samples[step]
+        steps_out[step] = {
+            "count": len(vals),
+            "avg_s": round(_stats.mean(vals), 2),
+            "median_s": round(_stats.median(vals), 2),
+            "min_s": round(min(vals), 2),
+            "max_s": round(max(vals), 2),
+            "stdev_s": round(_stats.stdev(vals), 2) if len(vals) > 1 else 0.0,
+        }
+
+    # Total cases with timing data
+    cases_with_timings = sum(
+        1 for rr in result_rows
+        if rr.result_json and json.loads(rr.result_json).get("timings")
+    )
+
+    return {
+        "count": cases_with_timings,
+        "steps": steps_out,
+    }
+
+
+@router.get("/timings/{run_id}")
+def get_run_timings(run_id: str, session: Session = Depends(get_session)):
+    """Timing breakdown for a single run's cases."""
+    run = session.get(Run, run_id)
+    if not run:
+        raise HTTPException(status_code=404, detail="Run not found")
+
+    result_rows = session.exec(
+        select(TestResultRow).where(TestResultRow.run_id == run_id)
+    ).all()
+
+    cases = session.exec(
+        select(StoredTestCase).where(StoredTestCase.run_id == run_id)
+    ).all()
+    case_names = {}
+    for c in cases:
+        try:
+            cdata = json.loads(c.case_json)
+            case_names[cdata.get("id", "")] = cdata.get("name", "")
+        except Exception:
+            pass
+
+    rows = []
+    for rr in result_rows:
+        try:
+            payload = json.loads(rr.result_json)
+        except Exception:
+            continue
+        case_id = payload.get("test_case_id", "")
+        timings = payload.get("timings") or {}
+        rows.append({
+            "case_id": case_id,
+            "name": case_names.get(case_id, case_id),
+            "status": payload.get("status", "unknown"),
+            "timings": timings,
+        })
+
+    return {"run_id": run_id, "cases": rows}
 
 
 @router.get("/export/{run_id}.json")

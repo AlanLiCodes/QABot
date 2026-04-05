@@ -7,7 +7,8 @@ from models.schemas import TestCase, TestResultPayload
 VALIDATOR_SYSTEM = """You are a QA validator. Given a test case, executor trace, page metadata, and evidence paths,
 classify outcome as pass, fail, flaky, or blocked.
 Output ONLY JSON with keys: status, severity (low|medium|high), confidence (0-1), failed_step (string or null),
-expected (short), actual (short), repro_steps (array of strings), suspected_issue, business_impact.
+expected (short), actual (short), repro_steps (array of strings), suspected_issue, business_impact,
+suggested_fix (1-3 concrete developer actions to fix or investigate the issue; empty string if status is pass).
 blocked = login/MFA/captcha missing. fail = clear unmet expectation. pass = criteria reasonably met."""
 
 
@@ -21,7 +22,7 @@ async def validate_result(
 ) -> TestResultPayload:
     key = (os.getenv("GOOGLE_API_KEY") or "").strip()
     if key:
-        model = os.getenv("GEMINI_VALIDATOR_MODEL", "gemini-2.0-flash")
+        model = os.getenv("GEMINI_VALIDATOR_MODEL", "gemini-3-flash-preview")
         user = json.dumps(
             {
                 "test_case": case.model_dump(),
@@ -74,6 +75,7 @@ def _payload_from_dict(case_id: str, raw: dict[str, Any], trace: str) -> TestRes
         evidence=[],
         suspected_issue=str(raw.get("suspected_issue", "")),
         business_impact=str(raw.get("business_impact", "")),
+        suggested_fix=str(raw.get("suggested_fix", "")),
         agent_trace=trace,
     )
 

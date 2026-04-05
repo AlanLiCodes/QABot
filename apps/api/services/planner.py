@@ -129,7 +129,7 @@ async def generate_test_cases(
     if not key:
         return _fallback_cases(url, requirement_text, max_cases)
 
-    model = os.getenv("GEMINI_PLANNER_MODEL", "gemini-2.0-flash")
+    model = os.getenv("GEMINI_PLANNER_MODEL", "gemini-3-flash-preview")
     user = f"Target URL: {url}\nRequirement:\n{requirement_text}\nGenerate at most {max_cases} cases."
 
     try:

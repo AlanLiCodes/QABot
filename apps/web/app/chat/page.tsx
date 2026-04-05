@@ -226,6 +226,16 @@ function ChatPageInner() {
         pushMessage({ role: "agent", text: `Running case ${idx}: ${name}` });
         break;
       }
+      case "case_live_url": {
+        const liveUrl = event.data.live_url as string;
+        if (liveUrl) {
+          pushMessage({
+            role: "system",
+            text: `Live browser session started — [watch now](${liveUrl})`,
+          });
+        }
+        break;
+      }
       case "case_completed": {
         const status = event.data.status as string;
         const summary = (event.data.summary as string) ?? "";
