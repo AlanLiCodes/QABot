@@ -52,3 +52,18 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ path?: str
   const { path } = await ctx.params;
   return forward(req, path ?? []);
 }
+
+export async function PUT(req: NextRequest, ctx: { params: Promise<{ path?: string[] }> }) {
+  const { path } = await ctx.params;
+  return forward(req, path ?? []);
+}
+
+export async function PATCH(req: NextRequest, ctx: { params: Promise<{ path?: string[] }> }) {
+  const { path } = await ctx.params;
+  return forward(req, path ?? []);
+}
+
+export async function DELETE(req: NextRequest, ctx: { params: Promise<{ path?: string[] }> }) {
+  const { path } = await ctx.params;
+  return forward(req, path ?? []);
+}
