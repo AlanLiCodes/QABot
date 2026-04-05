@@ -285,7 +285,8 @@ function ChatPageInner() {
         {mode === "discuss" && existingRun ? (
           <>
             <div>
-              <p className="text-xs font-semibold uppercase tracking-widest text-violet-400">
+              <p className="text-xs font-semibold uppercase tracking-widest text-green
+              -400">
                 Analysing run
               </p>
               <p className="mt-1 break-all font-mono text-xs text-zinc-400">{existingRun.url}</p>
@@ -346,7 +347,7 @@ function ChatPageInner() {
         ) : (
           <>
             <div>
-              <p className="text-xs font-semibold uppercase tracking-widest text-violet-400">
+              <p className="text-xs font-semibold uppercase tracking-widest text-green-400">
                 Interactive QA agent
               </p>
               <p className="mt-1 text-xs text-zinc-500">
@@ -360,7 +361,7 @@ function ChatPageInner() {
               </label>
               <input
                 id="chat-url"
-                className="mt-1 w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 font-mono text-xs text-white outline-none focus:border-violet-500"
+                className="mt-1 w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 font-mono text-xs text-white outline-none focus:border-green-500"
                 value={url}
                 onChange={(e) => setUrl(e.target.value)}
                 disabled={running}
@@ -374,7 +375,7 @@ function ChatPageInner() {
               <textarea
                 id="chat-req"
                 rows={5}
-                className="mt-1 w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-xs text-white outline-none focus:border-violet-500"
+                className="mt-1 w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-xs text-white outline-none focus:border-green-500"
                 value={requirement}
                 onChange={(e) => setRequirement(e.target.value)}
                 disabled={running}
@@ -402,7 +403,7 @@ function ChatPageInner() {
                 type="button"
                 disabled={running}
                 onClick={() => void onRun()}
-                className="flex flex-1 items-center justify-center gap-1.5 rounded-lg bg-violet-600 px-4 py-2 text-sm font-medium text-white hover:bg-violet-500 disabled:opacity-50"
+                className="flex flex-1 items-center justify-center gap-1.5 rounded-lg bg-green-600 px-4 py-2 text-sm font-medium text-white hover:bg-green-500 disabled:opacity-50"
               >
                 <Play size={14} />
                 {running ? "Running..." : "Run"}
@@ -469,7 +470,7 @@ function ChatPageInner() {
               <input
                 type="text"
                 placeholder="Ask about these results..."
-                className="flex-1 rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-white outline-none focus:border-violet-500 disabled:opacity-50"
+                className="flex-1 rounded-lg border border-zinc-700 bg-zinc-900 px-3 py-2 text-sm text-white outline-none focus:border-green-500 disabled:opacity-50"
                 value={question}
                 onChange={(e) => setQuestion(e.target.value)}
                 onKeyDown={(e) => {
@@ -484,7 +485,7 @@ function ChatPageInner() {
                 type="button"
                 onClick={() => void onAsk()}
                 disabled={asking || !question.trim()}
-                className="flex items-center gap-1.5 rounded-lg bg-violet-600 px-4 py-2 text-sm font-medium text-white hover:bg-violet-500 disabled:opacity-50"
+                className="flex items-center gap-1.5 rounded-lg bg-green-600 px-4 py-2 text-sm font-medium text-white hover:bg-green-500 disabled:opacity-50"
               >
                 <MessageSquare size={14} />
                 {asking ? "Asking..." : "Ask"}
@@ -506,7 +507,7 @@ function MessageBubble({ msg }: { msg: ChatMessage }) {
       <div
         className={`max-w-lg rounded-2xl px-4 py-2.5 text-sm ${
           isUser
-            ? "rounded-br-sm bg-violet-700 text-white"
+            ? "rounded-br-sm bg-green-700 text-white"
             : isSystem
               ? "rounded-bl-sm border border-zinc-700 bg-zinc-800/60 text-xs italic text-zinc-400"
               : "rounded-bl-sm bg-zinc-800 text-zinc-200"
@@ -532,7 +533,7 @@ function MessageBubble({ msg }: { msg: ChatMessage }) {
         {msg.runId && (
           <Link
             href={`/runs/${msg.runId}`}
-            className="mt-2 flex items-center gap-1 text-xs text-violet-400 hover:underline"
+            className="mt-2 flex items-center gap-1 text-xs text-green-400 hover:underline"
           >
             <ExternalLink size={11} />
             View full results

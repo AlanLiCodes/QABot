@@ -54,7 +54,7 @@ export default function TimingsPage() {
             <ArrowLeft size={18} />
           </Link>
           <h1 className="flex items-center gap-2 text-2xl font-semibold text-white">
-            <Clock size={20} className="text-violet-400" />
+            <Clock size={20} className="text-green-400" />
             Timing Statistics
           </h1>
           <button

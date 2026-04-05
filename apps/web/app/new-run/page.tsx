@@ -131,7 +131,7 @@ export default function NewRunPage() {
             </label>
             <input
               id="url-input"
-              className="mt-1.5 w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 font-mono text-sm text-white outline-none focus:border-violet-500 focus:ring-1 focus:ring-violet-500/30"
+              className="mt-1.5 w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 font-mono text-sm text-white outline-none focus:border-green-500 focus:ring-1 focus:ring-green-500/30"
               value={url}
               onChange={(e) => setUrl(e.target.value)}
               placeholder="https://example.com"
@@ -145,7 +145,7 @@ export default function NewRunPage() {
             <textarea
               id="req-input"
               rows={4}
-              className="mt-1.5 w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm text-white outline-none focus:border-violet-500 focus:ring-1 focus:ring-violet-500/30"
+              className="mt-1.5 w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 text-sm text-white outline-none focus:border-green-500 focus:ring-1 focus:ring-green-500/30"
               value={requirement}
               onChange={(e) => setRequirement(e.target.value)}
             />
@@ -157,7 +157,7 @@ export default function NewRunPage() {
             </label>
             <select
               id="viewport-select"
-              className="rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-1.5 text-sm text-white outline-none focus:border-violet-500"
+              className="rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-1.5 text-sm text-white outline-none focus:border-green-500"
               value={viewport}
               onChange={(e) => setViewport(e.target.value as "desktop" | "mobile")}
             >
@@ -177,7 +177,7 @@ export default function NewRunPage() {
               type="button"
               disabled={loading}
               onClick={() => void onGenerate()}
-              className="rounded-lg bg-violet-600 px-4 py-2 text-sm font-medium text-white hover:bg-violet-500 disabled:opacity-50"
+              className="rounded-lg bg-green-600 px-4 py-2 text-sm font-medium text-white hover:bg-green-500 disabled:opacity-50"
             >
               {loading ? "Working..." : "Generate test cases"}
             </button>
@@ -193,7 +193,7 @@ export default function NewRunPage() {
               type="button"
               disabled={loading}
               onClick={() => setShowScheduleModal(true)}
-              className="flex items-center gap-1.5 rounded-lg border border-violet-800/60 bg-violet-950/40 px-4 py-2 text-sm font-medium text-violet-300 hover:bg-violet-950/70 disabled:opacity-50"
+              className="flex items-center gap-1.5 rounded-lg border border-green-800/60 bg-green-950/40 px-4 py-2 text-sm font-medium text-green-300 hover:bg-green-950/70 disabled:opacity-50"
             >
               <Clock size={14} />
               Schedule
@@ -256,7 +256,7 @@ export default function NewRunPage() {
         <section className="mt-10">
           <div className="flex items-center justify-between">
             <h2 className="text-sm font-semibold text-zinc-300">Recent runs</h2>
-            <Link href="/runs" className="flex items-center gap-1 text-xs text-violet-400 hover:underline">
+            <Link href="/runs" className="flex items-center gap-1 text-xs text-green-400 hover:underline">
               View all
               <ArrowRight size={12} />
             </Link>
@@ -268,7 +268,7 @@ export default function NewRunPage() {
             {recent.slice(0, 5).map((r) => (
               <li key={r.run_id} className="flex flex-wrap items-center justify-between gap-2 px-4 py-3">
                 <div>
-                  <Link href={`/runs/${r.run_id}`} className="font-mono text-sm text-violet-400 hover:underline">
+                  <Link href={`/runs/${r.run_id}`} className="font-mono text-sm text-green-400 hover:underline">
                     {r.run_id.slice(0, 8)}
                   </Link>
                   <div className="text-xs text-zinc-500">{r.url}</div>
@@ -341,7 +341,7 @@ function RunModal({ onConfirm, onCancel }: { onConfirm: () => void; onCancel: ()
         <div className="space-y-4 px-6 py-5">
           <p className="text-sm text-zinc-300">
             Please type{" "}
-            <code className="rounded bg-zinc-800 px-1.5 py-0.5 font-mono text-violet-300">run suite</code>{" "}
+            <code className="rounded bg-zinc-800 px-1.5 py-0.5 font-mono text-green-300">run suite</code>{" "}
             to confirm you want to launch a full browser test run against the target URL.
           </p>
           <p className="text-sm text-zinc-500">
@@ -359,7 +359,7 @@ function RunModal({ onConfirm, onCancel }: { onConfirm: () => void; onCancel: ()
               onChange={(e) => setTyped(e.target.value)}
               onKeyDown={(e) => { if (e.key === "Enter" && confirmed) onConfirm(); }}
               placeholder="run suite"
-              className="w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 font-mono text-sm text-white outline-none focus:border-violet-500 focus:ring-1 focus:ring-violet-500/30"
+              className="w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 font-mono text-sm text-white outline-none focus:border-green-500 focus:ring-1 focus:ring-green-500/30"
               autoComplete="off"
               spellCheck={false}
             />
@@ -369,7 +369,7 @@ function RunModal({ onConfirm, onCancel }: { onConfirm: () => void; onCancel: ()
           <button type="button" onClick={onCancel} className="rounded-lg border border-zinc-600 bg-zinc-800 px-4 py-2 text-sm font-medium text-white hover:bg-zinc-700">
             Cancel
           </button>
-          <button type="button" onClick={onConfirm} disabled={!confirmed} className="rounded-lg bg-violet-600 px-4 py-2 text-sm font-medium text-white hover:bg-violet-500 disabled:cursor-not-allowed disabled:opacity-40">
+          <button type="button" onClick={onConfirm} disabled={!confirmed} className="rounded-lg bg-green-600 px-4 py-2 text-sm font-medium text-white hover:bg-green-500 disabled:cursor-not-allowed disabled:opacity-40">
             Confirm run
           </button>
         </div>
@@ -415,7 +415,7 @@ function ScheduleModal({
       <div className="w-full max-w-md rounded-xl border border-zinc-700 bg-zinc-900 shadow-2xl">
         <div className="flex items-start justify-between border-b border-zinc-800 px-6 py-4">
           <div className="flex items-center gap-3">
-            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-violet-950 text-violet-400">
+            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-green-950 text-green-400">
               <Clock size={16} />
             </div>
             <h2 className="text-base font-semibold text-white">Schedule Recurring Run</h2>
@@ -440,7 +440,7 @@ function ScheduleModal({
                   onClick={() => setInterval(opt.value)}
                   className={`rounded-lg border px-3 py-3 text-left transition-colors ${
                     interval === opt.value
-                      ? "border-violet-600 bg-violet-950/60 text-violet-300"
+                      ? "border-green-600 bg-green-950/60 text-green-300"
                       : "border-zinc-700 bg-zinc-800/40 text-zinc-400 hover:border-zinc-600 hover:text-zinc-200"
                   }`}
                 >
@@ -453,7 +453,7 @@ function ScheduleModal({
 
           <div>
             <label className="mb-1.5 block text-xs font-medium text-zinc-400" htmlFor="schedule-confirm-input">
-              Type <span className="font-mono text-violet-300">schedule</span> to confirm
+              Type <span className="font-mono text-green-300">schedule</span> to confirm
             </label>
             <input
               id="schedule-confirm-input"
@@ -463,7 +463,7 @@ function ScheduleModal({
               onChange={(e) => setTyped(e.target.value)}
               onKeyDown={(e) => { if (e.key === "Enter" && confirmed) onConfirm(interval); }}
               placeholder="schedule"
-              className="w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 font-mono text-sm text-white outline-none focus:border-violet-500 focus:ring-1 focus:ring-violet-500/30"
+              className="w-full rounded-lg border border-zinc-700 bg-zinc-950 px-3 py-2 font-mono text-sm text-white outline-none focus:border-green-500 focus:ring-1 focus:ring-green-500/30"
               autoComplete="off"
               spellCheck={false}
             />
@@ -478,7 +478,7 @@ function ScheduleModal({
             type="button"
             onClick={() => onConfirm(interval)}
             disabled={!confirmed}
-            className="flex items-center gap-1.5 rounded-lg bg-violet-600 px-4 py-2 text-sm font-medium text-white hover:bg-violet-500 disabled:cursor-not-allowed disabled:opacity-40"
+            className="flex items-center gap-1.5 rounded-lg bg-green-600 px-4 py-2 text-sm font-medium text-white hover:bg-green-500 disabled:cursor-not-allowed disabled:opacity-40"
           >
             <Clock size={14} />
             Create schedule

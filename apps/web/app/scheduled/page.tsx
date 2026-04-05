@@ -14,7 +14,7 @@ const INTERVAL_LABEL: Record<string, string> = {
 
 const INTERVAL_COLOR: Record<string, string> = {
   hourly: "bg-amber-950 text-amber-300 border-amber-800",
-  daily:  "bg-violet-950 text-violet-300 border-violet-800",
+  daily:  "bg-green-950 text-green-300 border-green-800",
   weekly: "bg-sky-950 text-sky-300 border-sky-800",
 };
 
@@ -84,7 +84,7 @@ export default function ScheduledPage() {
             </button>
             <Link
               href="/new-run"
-              className="flex items-center gap-1.5 rounded-lg bg-gradient-to-r from-amber-400 to-violet-600 px-4 py-2 text-sm font-semibold text-white hover:from-amber-300 hover:to-violet-500"
+              className="flex items-center gap-1.5 rounded-lg bg-gradient-to-r from-orange-400 to-green-600 px-4 py-2 text-sm font-semibold text-white hover:from-amber-300 hover:to-green-500"
             >
               <PlusCircle size={14} />
               New schedule
@@ -110,7 +110,7 @@ export default function ScheduledPage() {
               </p>
               <Link
                 href="/new-run"
-                className="mt-5 flex items-center gap-1.5 rounded-lg bg-gradient-to-r from-amber-400 to-violet-600 px-5 py-2 text-sm font-semibold text-white"
+                className="mt-5 flex items-center gap-1.5 rounded-lg bg-gradient-to-r from-orange-400 to-green-600 px-5 py-2 text-sm font-semibold text-white"
               >
                 <PlusCircle size={14} />
                 Create a schedule
@@ -186,7 +186,7 @@ function ScheduleCard({
             {s.last_run_id && (
               <Link
                 href={`/runs/${s.last_run_id}`}
-                className="flex items-center gap-1 text-violet-500 hover:text-violet-400"
+                className="flex items-center gap-1 text-green-500 hover:text-green-400"
               >
                 <ExternalLink size={11} />
                 Last run

@@ -167,14 +167,14 @@ export default function AboutPage() {
 
       {/* ── Hero ──────────────────────────────────────────────────────── */}
       <section className="relative flex flex-col items-center justify-center overflow-hidden px-4 pb-24 pt-24 text-center">
-        <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_80%_55%_at_50%_-5%,rgba(124,58,237,0.22),transparent)]" />
+        <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_80%_55%_at_50%_-5%,rgba(230, 129, 20, 0.22),transparent)]" />
 
-        <p className="relative mb-5 text-xs font-semibold uppercase tracking-[0.25em] text-violet-400">
-          DiamondHacks 2026 · Kumqat
+        <p className="relative mb-5 text-xs font-semibold uppercase tracking-[0.25em] text-orange-400">
+          kumQAt
         </p>
 
         <h1 className="relative max-w-3xl text-5xl font-extrabold leading-tight tracking-tight sm:text-6xl">
-          <span className="bg-gradient-to-r from-amber-400 via-violet-400 to-purple-500 bg-clip-text text-transparent">
+          <span className="bg-gradient-to-r from-orange-400 to-green-400 bg-clip-text text-transparent">
             Requirements to browser runs to bug reports
           </span>
         </h1>
@@ -188,7 +188,7 @@ export default function AboutPage() {
         <div className="relative mt-9 flex flex-wrap justify-center gap-4">
           <Link
             href="/new-run"
-            className="rounded-xl bg-gradient-to-r from-amber-400 to-violet-600 px-8 py-3 text-sm font-semibold text-white shadow-lg transition-all hover:from-amber-300 hover:to-violet-500"
+            className="rounded-xl bg-gradient-to-r from-orange-400 to-green-400 px-8 py-3 text-sm font-semibold text-white shadow-lg transition-all hover:from-orange-300 hover:to-green-500"
           >
             Start Testing Now
           </Link>
@@ -227,7 +227,7 @@ export default function AboutPage() {
         <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_60%_60%_at_50%_50%,rgba(124,58,237,0.08),transparent)]" />
 
         <h2 className="relative text-3xl font-bold sm:text-4xl">
-          <span className="bg-gradient-to-r from-amber-400 via-violet-400 to-purple-500 bg-clip-text text-transparent">
+          <span className="bg-gradient-to-r from-orange-400 to-green-400 bg-clip-text text-transparent">
             Why Choose Kumqat?
           </span>
         </h2>
@@ -239,7 +239,7 @@ export default function AboutPage() {
               className="rounded-2xl border border-zinc-800 bg-zinc-900/60 px-6 py-8"
             >
               <p className="text-4xl font-extrabold text-white">{value}</p>
-              <p className="mt-2 text-sm font-semibold text-violet-400">{label}</p>
+              <p className="mt-2 text-sm font-semibold text-orange-400">{label}</p>
               <p className="mt-1 text-xs text-zinc-500">{sub}</p>
             </div>
           ))}
@@ -254,7 +254,7 @@ export default function AboutPage() {
 
         <Link
           href="/new-run"
-          className="relative mt-8 inline-block rounded-xl bg-gradient-to-r from-amber-400 to-violet-600 px-8 py-3 text-sm font-semibold text-white shadow-lg transition-all hover:from-amber-300 hover:to-violet-500"
+          className="relative mt-8 inline-block rounded-xl bg-gradient-to-r from-orange-400 to-green-400 px-8 py-3 text-sm font-semibold text-white shadow-lg transition-all hover:from-amber-300 hover:to-green-500"
         >
           Get Started Now
         </Link>
@@ -278,7 +278,7 @@ export default function AboutPage() {
                 <span>{item.q}</span>
                 <ChevronDown
                   size={16}
-                  className="ml-4 shrink-0 text-violet-400 transition-transform group-open:rotate-180"
+                  className="ml-4 shrink-0 text-green-400 transition-transform group-open:rotate-180"
                 />
               </summary>
               <div className="border-t border-zinc-800 px-4 py-3">

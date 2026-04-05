@@ -55,7 +55,7 @@ export default function RunsPage() {
             </button>
             <Link
               href="/new-run"
-              className="flex items-center gap-1.5 rounded-lg bg-gradient-to-r from-amber-400 to-violet-600 px-4 py-2 text-sm font-semibold text-white hover:from-amber-300 hover:to-violet-500"
+              className="flex items-center gap-1.5 rounded-lg bg-gradient-to-r from-orange-400 to-green-600 px-4 py-2 text-sm font-semibold text-white hover:from-orange-400 to-green-600"
             >
               <Plus size={14} />
               New run
@@ -83,7 +83,7 @@ export default function RunsPage() {
               <p className="text-sm text-zinc-500">No runs yet.</p>
               <Link
                 href="/new-run"
-                className="mt-3 inline-flex items-center gap-1.5 text-sm text-violet-400 hover:underline"
+                className="mt-3 inline-flex items-center gap-1.5 text-sm text-green-400 hover:underline"
               >
                 Create your first run
                 <ArrowRight size={13} />
@@ -101,7 +101,7 @@ export default function RunsPage() {
                   >
                     <div className="min-w-0">
                       <div className="flex items-center gap-2">
-                        <span className="font-mono text-sm font-medium text-violet-400">
+                        <span className="font-mono text-sm font-medium text-orange-400">
                           {r.run_id.slice(0, 8)}
                         </span>
                         <span

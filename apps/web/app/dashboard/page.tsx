@@ -182,7 +182,7 @@ function EmptyState() {
       <p className="text-sm text-zinc-500">No test runs yet. Run a test suite to see your dashboard.</p>
       <Link
         href="/new-run"
-        className="mt-4 flex items-center gap-1.5 rounded-lg bg-gradient-to-r from-amber-400 to-violet-600 px-5 py-2 text-sm font-semibold text-white"
+        className="mt-4 flex items-center gap-1.5 rounded-lg bg-gradient-to-r from-orange-400 to-green-600 px-5 py-2 text-sm font-semibold text-white"
       >
         <PlusCircle size={14} />
         Create a run
