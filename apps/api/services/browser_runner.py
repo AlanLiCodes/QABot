@@ -16,9 +16,14 @@ def _task_prompt(case: TestCase, url: str) -> str:
             *[f"{i+1}. {s}" for i, s in enumerate(case.steps or ["Open the start URL and explore the UI"])],
             "Expected outcomes: " + "; ".join(case.expected_outcomes or ["No critical breakage"]),
             "Failure signals to watch for: " + "; ".join(case.failure_signals or []),
-            "Rules: prefer visible UI; after major actions note what you see; "
-            "if login/MFA/captcha is required and not provided, stop with BLOCKED and why.",
-            "End with a short RESULT line: PASS, FAIL, or BLOCKED and one-sentence rationale.",
+            "Navigation safety rules:",
+            "  - Prefer read-only actions: browse categories, scroll, search, read listings.",
+            "  - For 'safe navigation click' tests: click category links, menu items, or browse links.",
+            "  - AVOID action buttons that start multi-step flows: 'post', 'sign up', 'register', 'buy', 'checkout', 'delete', 'submit form'.",
+            "  - If a step says 'one safe click', pick the most passive browsing action available.",
+            "  - If login/MFA/captcha is required and not provided, stop with BLOCKED and why.",
+            "  - Do not fill or submit forms unless the test explicitly asks for form testing.",
+            "End with a line starting exactly: RESULT: PASS, RESULT: FAIL, or RESULT: BLOCKED — then one sentence rationale.",
         ]
     )
 

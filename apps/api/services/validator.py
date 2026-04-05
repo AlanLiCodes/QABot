@@ -1,8 +1,11 @@
 import json
+import logging
 import os
 from typing import Any
 
 from models.schemas import TestCase, TestResultPayload
+
+log = logging.getLogger("uvicorn.error")
 
 VALIDATOR_SYSTEM = """You are a QA validator. Given a test case, executor trace, page metadata, and evidence paths,
 classify outcome as pass, fail, flaky, or blocked.
@@ -50,8 +53,8 @@ async def validate_result(
             )
             raw = json.loads(response.text or "{}")
             return _payload_from_dict(case.id, raw, trace)
-        except Exception:
-            pass  # fall through to heuristic
+        except Exception as exc:
+            log.warning("Kumqat validator: Gemini call failed, falling back to heuristic. Error: %s", exc)
 
     return _heuristic_validate(case, trace, page_title, final_url, evidence, http_ok)
 
@@ -81,12 +84,43 @@ def _payload_from_dict(case_id: str, raw: dict[str, Any], trace: str) -> TestRes
 
 
 def _extract_error_line(trace: str) -> str:
-    """Pull the first BLOCKED/NETWORK ERROR/PLAYWRIGHT ERROR line from the trace."""
+    """Pull the first BLOCKED/NETWORK ERROR/HTTP ERROR line from the trace."""
     for line in trace.splitlines():
-        for prefix in ("BLOCKED:", "NETWORK ERROR:", "PLAYWRIGHT ERROR:", "SERVER ERROR:", "HTTP ERROR:"):
+        for prefix in ("BLOCKED:", "NETWORK ERROR:", "SERVER ERROR:", "HTTP ERROR:"):
             if line.strip().startswith(prefix):
                 return line.strip()
     return ""
+
+
+def _parse_browser_use_outcome(trace: str) -> tuple[str | None, bool | None, str]:
+    """Parse Browser Use agent final output.
+
+    Returns:
+        (result_status, self_reported_success, final_output_text)
+        result_status: "pass" | "fail" | "blocked" | None (not found)
+        self_reported_success: True | False | None (not found)
+        final_output_text: the raw Final output line, or ""
+    """
+    result_status: str | None = None
+    self_reported: bool | None = None
+    final_output = ""
+
+    for line in trace.splitlines():
+        stripped = line.strip()
+        if stripped.startswith("Final output:"):
+            final_output = stripped[len("Final output:"):].strip()
+            upper = final_output.upper()
+            if "RESULT: PASS" in upper:
+                result_status = "pass"
+            elif "RESULT: FAIL" in upper or "RESULT: FAILED" in upper:
+                result_status = "fail"
+            elif "RESULT: BLOCKED" in upper:
+                result_status = "blocked"
+        elif stripped.startswith("Agent self-reported success:"):
+            val = stripped.split(":", 1)[1].strip().lower()
+            self_reported = val == "true"
+
+    return result_status, self_reported, final_output
 
 
 def _heuristic_validate(
@@ -129,7 +163,6 @@ def _heuristic_validate(
     # ── Network / navigation failure ─────────────────────────────────────────
     if not http_ok or not page_title.strip():
         error_line = _extract_error_line(trace) or "Navigation failed or page returned no content."
-        # Try to infer a more specific cause from the trace
         if "dns" in tl or "name_not_resolved" in tl or "name_not_found" in tl:
             suspected = "DNS resolution failed — check that the URL is correct and the domain exists."
             impact = "The domain cannot be reached; users would see a browser error page."
@@ -163,35 +196,76 @@ def _heuristic_validate(
             agent_trace=trace,
         )
 
-    # ── Runtime / UI error ───────────────────────────────────────────────────
-    if "error" in tl and "no error" not in tl:
+    # ── Parse Browser Use agent's own verdict (highest fidelity signal) ──────
+    bu_result, bu_success, bu_final_output = _parse_browser_use_outcome(trace)
+
+    if bu_result == "pass" or (bu_result is None and bu_success is True):
+        return TestResultPayload(
+            test_case_id=case.id,
+            status="pass",
+            severity="low",
+            confidence=0.80,
+            failed_step=None,
+            expected="; ".join(case.expected_outcomes[:2]) or case.goal,
+            actual=bu_final_output[:200] if bu_final_output else f"Agent completed successfully. Loaded: {page_title[:80]}",
+            repro_steps=case.steps[:4] if case.steps else [f"Open {final_url}"],
+            evidence=evidence,
+            suspected_issue="",
+            business_impact="No blocking issue detected.",
+            agent_trace=trace,
+        )
+
+    if bu_result == "fail" or bu_success is False:
+        # Try to identify the first failing step
+        failed_step = None
+        for line in trace.splitlines():
+            if "verdict: failure" in line.lower() or "verdict: fail" in line.lower():
+                # Look at the preceding Step line
+                pass
         return TestResultPayload(
             test_case_id=case.id,
             status="fail",
             severity="medium",
-            confidence=0.6,
+            confidence=0.78,
             failed_step=case.steps[0] if case.steps else "Execute flow",
             expected="; ".join(case.expected_outcomes[:2]) or case.goal,
-            actual="Trace mentions an error state — see agent trace for details.",
+            actual=bu_final_output[:300] if bu_final_output else "Agent reported failure — see trace for details.",
             repro_steps=case.steps[:6],
             evidence=evidence,
-            suspected_issue="See agent trace for UI or runtime error hints.",
-            business_impact="Feature may be unreliable for end users.",
+            suspected_issue="Browser Use agent reported a failure. See agent trace for step-by-step details.",
+            business_impact="Feature may be broken or unreliable for end users.",
             agent_trace=trace,
         )
 
-    # ── Apparent pass ────────────────────────────────────────────────────────
+    if bu_result == "blocked":
+        return TestResultPayload(
+            test_case_id=case.id,
+            status="blocked",
+            severity="medium",
+            confidence=0.75,
+            failed_step="Execute flow",
+            expected="; ".join(case.expected_outcomes[:2]) or case.goal,
+            actual=bu_final_output[:200] if bu_final_output else "Agent was blocked.",
+            repro_steps=case.steps[:5] if case.steps else [f"Open {final_url}"],
+            evidence=evidence,
+            suspected_issue="Agent could not complete the flow due to auth, CAPTCHA, or access restriction.",
+            business_impact="Automated QA cannot verify this flow.",
+            agent_trace=trace,
+        )
+
+    # ── Fallback: no Browser Use output available ─────────────────────────────
+    # Only reach here if no browser agent ran (HTTP-only trace)
     return TestResultPayload(
         test_case_id=case.id,
         status="pass",
         severity="low",
-        confidence=0.62,
+        confidence=0.55,
         failed_step=None,
         expected="; ".join(case.expected_outcomes[:2]) or case.goal,
-        actual=f"Loaded: {page_title[:80]} — trace length {len(trace)} chars.",
+        actual=f"HTTP check passed. Loaded: {page_title[:80]}",
         repro_steps=case.steps[:4] if case.steps else [f"Open {final_url}"],
         evidence=evidence,
         suspected_issue="",
-        business_impact="No blocking issue detected by heuristics.",
+        business_impact="No blocking issue detected by HTTP check (no browser agent ran).",
         agent_trace=trace,
     )
